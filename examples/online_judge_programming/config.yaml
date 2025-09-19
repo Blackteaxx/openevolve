@@ -1,16 +1,19 @@
 # Configuration for function minimization example
-max_iterations: 20
+max_iterations: 200
 checkpoint_interval: 1
 log_level: "INFO"
 
 # LLM configuration
+# 2025.9.17: Adapt openroute model
 llm:
-  primary_model: "gemini-2.0-flash"
+  # primary_model: "gemini-2.0-flash"
+  primary_model: "google/gemini-2.5-flash-lite"
   primary_model_weight: 0.6
-  secondary_model: "gemini-2.5-flash-preview-05-20"
+  # secondary_model: "gemini-2.5-flash-preview-05-20"
+  secondary_model: "google/gemini-2.5-flash"
   secondary_model_weight: 0.4
-  api_base: "https://generativelanguage.googleapis.com/v1beta/openai/"
-  api_key: YOUR_API_KEY
+  api_base: https://openrouter.ai/api/v1
+  api_key: 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                     
   temperature: 0.7
   top_p: 0.95
   max_tokens: 4096
@@ -60,7 +63,9 @@ database:
 
 # Evaluator configuration
 evaluator:
-  timeout: 60
+# 2025.9.17: More time for Kattis Evaluation
+  # timeout: 60
+  timeout: 120 
   cascade_evaluation: false
   cascade_thresholds: [1.0]
   parallel_evaluations: 4

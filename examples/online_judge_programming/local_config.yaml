@@ -3,19 +3,16 @@ max_iterations: 50
 checkpoint_interval: 5
 
 # LLM configuration
+# 2025.9.17: Adapt local model
 llm:
-  primary_model: "google/gemini-2.5-flash-lite"
-  # primary_model: "llama3.1-8b"
-  primary_model_weight: 0.8
-  secondary_model: "google/gemini-2.5-flash"
-  # secondary_model: "llama-4-scout-17b-16e-instruct"
-  
-  secondary_model_weight: 0.2
-  # 2025.9.16: Revise for openrouter.ai
-  api_base: https://openrouter.ai/api/v1
-  api_key: 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                     
-  # api_base: "https://generativelanguage.googleapis.com/v1beta/openai/"
-  # api_base: "https://api.cerebras.ai/v1"
+  primary_model: "deepseek-coder-1.3b-instruct"
+  primary_model_weight: 0.6
+
+  secondary_model: "qwen2.5-coder-7B-Instruct"
+  secondary_model_weight: 0.4
+
+  api_base: http://127.0.0.1:8080/v1
+  api_key: code-efficiency                     
   temperature: 0.7
   max_tokens: 16000
   timeout: 120
@@ -31,7 +28,6 @@ database:
   num_islands: 3
   elite_selection_ratio: 0.2
   exploitation_ratio: 0.7
-  log_prompts: true # Enable logging of prompts for debugging
 
 # Evaluator configuration
 evaluator:

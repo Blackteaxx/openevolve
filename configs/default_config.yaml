@@ -37,8 +37,11 @@ llm:
       weight: 0.2
 
   # API configuration
-  api_base: "https://generativelanguage.googleapis.com/v1beta/openai/"  # Base URL for API (change for non-OpenAI models)
-  api_key: null                       # API key (defaults to OPENAI_API_KEY env variable)
+  # 2025.9.16: Revise for openrouter.ai
+  # api_base: "https://generativelanguage.googleapis.com/v1beta/openai/"  # Base URL for API (change for non-OpenAI models)
+  api_base: https://openrouter.ai/api/v1
+  # api_key: null  # API key (defaults to OPENAI_API_KEY env variable)
+  api_key: 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                     
 
   # Generation parameters
   temperature: 0.7                    # Temperature for generation (higher = more creative)

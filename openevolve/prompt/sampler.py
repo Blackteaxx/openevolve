@@ -184,6 +184,7 @@ class PromptSampler:
         current_fitness = get_fitness_score(metrics, feature_dimensions)
 
         # Track fitness changes (not individual metrics)
+        # Note: Defaultly use the template in `fragments.json`
         if previous_programs:
             prev_metrics = previous_programs[-1].get("metrics", {})
             prev_fitness = get_fitness_score(prev_metrics, feature_dimensions)

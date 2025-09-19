@@ -2,14 +2,13 @@
 Main controller for OpenEvolve
 """
 
-import asyncio
 import logging
 import os
 import signal
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Optional
 
 from openevolve.config import Config, load_config
 from openevolve.database import Program, ProgramDatabase
@@ -139,9 +138,11 @@ class OpenEvolve:
                 self.file_extension = f".{self.file_extension}"
 
         # Initialize components
+        # Note: Initialize LLMEnsemble with models and evaluator_models
         self.llm_ensemble = LLMEnsemble(self.config.llm.models)
         self.llm_evaluator_ensemble = LLMEnsemble(self.config.llm.evaluator_models)
 
+        # Note: Initialize PromptSampler with prompt templates
         self.prompt_sampler = PromptSampler(self.config.prompt)
         self.evaluator_prompt_sampler = PromptSampler(self.config.prompt)
         self.evaluator_prompt_sampler.set_templates("evaluator_system_message")
@@ -150,8 +151,11 @@ class OpenEvolve:
         if self.config.random_seed is not None:
             self.config.database.random_seed = self.config.random_seed
 
+        # Note: Initialize ProgramDatabase with database configuration
         self.database = ProgramDatabase(self.config.database)
 
+        # Note: Initialize Evaluator with evaluator configuration, 
+        # evaluation file, LLM evaluator ensemble, evaluator prompt sampler, and database
         self.evaluator = Evaluator(
             self.config.evaluator,
             evaluation_file,
@@ -249,11 +253,11 @@ class OpenEvolve:
 
         # Only add initial program if starting fresh (not resuming from checkpoint)
         should_add_initial = (
-            start_iteration == 0
-            and len(self.database.programs) == 0
+            start_iteration == 0  # Add initial program only if not resuming from checkpoint
+            and len(self.database.programs) == 0  # Database is empty
             and not any(
                 p.code == self.initial_program_code for p in self.database.programs.values()
-            )
+            ) # Database does not contain the initial program
         )
 
         if should_add_initial:
@@ -320,7 +324,7 @@ class OpenEvolve:
             signal.signal(signal.SIGINT, signal_handler)
             signal.signal(signal.SIGTERM, signal_handler)
 
-            self.parallel_controller.start()
+            self.parallel_controller.start()  # Note: Start the process pool
 
             # When starting from iteration 0, we've already done the initial program evaluation
             # So we need to adjust the start_iteration for the actual evolution

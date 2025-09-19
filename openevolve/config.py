@@ -500,6 +500,8 @@ def load_config(config_path: Optional[Union[str, Path]] = None) -> Config:
         config.llm.update_model_params({"api_key": api_key, "api_base": api_base})
 
     # Make the system message available to the individual models, in case it is not provided from the prompt sampler
+    # Note: Set system_message for all models' configs(LLMModelConfig) in config.llm
+    # which contains system_message key
     config.llm.update_model_params({"system_message": config.prompt.system_message})
 
     return config

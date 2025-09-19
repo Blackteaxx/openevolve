@@ -53,3 +53,4 @@ htmlcov/
 # For SR
 secrets.yaml
 problems
+examples/online_judge_programming/.kattisrc

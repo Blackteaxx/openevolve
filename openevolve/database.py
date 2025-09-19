@@ -615,7 +615,7 @@ class ProgramDatabase:
         }
 
         with open(os.path.join(save_path, "metadata.json"), "w") as f:
-            json.dump(metadata, f)
+            json.dump(metadata, f, indent=2)
 
         logger.info(f"Saved database with {len(self.programs)} programs to {save_path}")
 
@@ -808,7 +808,7 @@ class ProgramDatabase:
         program_path = os.path.join(programs_dir, f"{program.id}.json")
 
         with open(program_path, "w") as f:
-            json.dump(program_dict, f)
+            json.dump(program_dict, f, indent=2)
 
     def _calculate_feature_coords(self, program: Program) -> List[int]:
         """

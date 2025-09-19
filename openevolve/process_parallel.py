@@ -5,13 +5,10 @@ Process-based parallel controller for true parallelism
 import asyncio
 import logging
 import multiprocessing as mp
-import pickle
-import signal
 import time
 from concurrent.futures import ProcessPoolExecutor, Future, TimeoutError as FutureTimeoutError
 from dataclasses import dataclass, asdict
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from openevolve.config import Config
 from openevolve.database import Program, ProgramDatabase
@@ -203,9 +200,33 @@ def _run_iteration_worker(
             from openevolve.utils.code_utils import extract_diffs, apply_diff, format_diff_summary
 
             diff_blocks = extract_diffs(llm_response)
+            
+            # 2025.9.17: Add Prompt Log - Custom logger for prompt flow
+            prompt_flow_logger = logging.getLogger("prompt_flow")
+            if not prompt_flow_logger.handlers:
+                # Create file handler for prompt flow log
+                prompt_handler = logging.FileHandler("prompt_flow.log", encoding="utf-8")
+                prompt_handler.setLevel(logging.INFO)
+                prompt_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+                prompt_handler.setFormatter(prompt_formatter)
+                prompt_flow_logger.addHandler(prompt_handler)
+                prompt_flow_logger.setLevel(logging.INFO)
+                prompt_flow_logger.propagate = False  # Prevent propagation to root logger
+            
+            prompt_flow_logger.info("=" * 80)
+            prompt_flow_logger.info(f"Iteration: {iteration}")
+            prompt_flow_logger.info(f"\nLLM system message: {prompt['system']}")
+            prompt_flow_logger.info(f"\nLLM user message: {prompt['user']}")
+            prompt_flow_logger.info(f"\nLLM generated response: {llm_response}")
+            if diff_blocks:
+                prompt_flow_logger.info(f"\nLLM generated diffs: {diff_blocks}")
+            else:
+                prompt_flow_logger.info("\nLLM generated no valid diffs")
+            prompt_flow_logger.info("=" * 80)
+            
             if not diff_blocks:
                 return SerializableResult(
-                    error=f"No valid diffs found in response", iteration=iteration
+                    error="No valid diffs found in response", iteration=iteration
                 )
 
             child_code = apply_diff(parent.code, llm_response)
@@ -216,7 +237,7 @@ def _run_iteration_worker(
             new_code = parse_full_rewrite(llm_response, _worker_config.language)
             if not new_code:
                 return SerializableResult(
-                    error=f"No valid code found in response", iteration=iteration
+                    error="No valid code found in response", iteration=iteration
                 )
 
             child_code = new_code
@@ -418,7 +439,10 @@ class ProcessParallelController:
         for island_id in range(self.num_islands):
             for _ in range(batch_per_island):
                 if current_iteration < total_iterations:
-                    future = self._submit_iteration(current_iteration, island_id)
+                    # Note: Submit iteration to process pool, which starts mission
+                    # This will block if process pool is full, but that's fine
+                    # as we're distributing evenly across islands
+                    future = self._submit_iteration(current_iteration, island_id) 
                     if future:
                         pending_futures[current_iteration] = future
                         island_pending[island_id].append(current_iteration)
@@ -450,7 +474,7 @@ class ProcessParallelController:
             and completed_iterations < max_iterations
             and not self.shutdown_event.is_set()
         ):
-            # Find completed futures
+            # Find completed futures. Process one per iteration.
             completed_iteration = None
             for iteration, future in list(pending_futures.items()):
                 if future.done():

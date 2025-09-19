@@ -76,10 +76,13 @@ class Evaluator:
                 sys.path.insert(0, eval_dir)
                 logger.debug(f"Added {eval_dir} to Python path for local imports")
 
+            # Note: import evaluation module from evaluation file
+            # Note: load specification from evaluation file
             spec = importlib.util.spec_from_file_location("evaluation_module", self.evaluation_file)
             if spec is None or spec.loader is None:
                 raise ImportError(f"Failed to load spec from {self.evaluation_file}")
 
+            # Note: import module from specification
             module = importlib.util.module_from_spec(spec)
             sys.modules["evaluation_module"] = module
             spec.loader.exec_module(module)
@@ -89,6 +92,7 @@ class Evaluator:
                     f"Evaluation file {self.evaluation_file} does not contain an 'evaluate' function"
                 )
 
+            # Note: Assign the 'evaluate' function from the module to the instance
             self.evaluate_function = module.evaluate
             logger.info(f"Successfully loaded evaluation function from {self.evaluation_file}")
 
@@ -346,11 +350,14 @@ class Evaluator:
         """
 
         # Create a coroutine that runs the evaluation function in an executor
+        # Note: Run the evaluation function in an executor to avoid blocking the event loop
+        # Note: evaluation function needs program_path as argument
         async def run_evaluation():
             loop = asyncio.get_event_loop()
             return await loop.run_in_executor(None, self.evaluate_function, program_path)
 
         # Run the evaluation with timeout - let exceptions bubble up for retry handling
+        # Note: result is returned by user's `evaluate` function 
         result = await asyncio.wait_for(run_evaluation(), timeout=self.config.timeout)
 
         # Return result as-is to be processed by _process_evaluation_result
