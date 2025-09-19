@@ -205,7 +205,13 @@ def _run_iteration_worker(
             prompt_flow_logger = logging.getLogger("prompt_flow")
             if not prompt_flow_logger.handlers:
                 # Create file handler for prompt flow log
-                prompt_handler = logging.FileHandler("prompt_flow.log", encoding="utf-8")
+                import os
+                output_dir = db_snapshot.get("output_dir")
+                if output_dir:
+                    prompt_flow_log_path = os.path.join(output_dir, "prompt_flow.log")
+                else:
+                    prompt_flow_log_path = "prompt_flow.log"  # Fallback to current directory
+                prompt_handler = logging.FileHandler(prompt_flow_log_path, encoding="utf-8")
                 prompt_handler.setLevel(logging.INFO)
                 prompt_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
                 prompt_handler.setFormatter(prompt_formatter)
@@ -295,11 +301,12 @@ def _run_iteration_worker(
 class ProcessParallelController:
     """Controller for process-based parallel evolution"""
 
-    def __init__(self, config: Config, evaluation_file: str, database: ProgramDatabase, evolution_tracer=None):
+    def __init__(self, config: Config, evaluation_file: str, database: ProgramDatabase, evolution_tracer=None, output_dir: str = None):
         self.config = config
         self.evaluation_file = evaluation_file
         self.database = database
         self.evolution_tracer = evolution_tracer
+        self.output_dir = output_dir
 
         self.executor: Optional[ProcessPoolExecutor] = None
         self.shutdown_event = mp.Event()
@@ -392,6 +399,7 @@ class ProcessParallelController:
             "current_island": self.database.current_island,
             "feature_dimensions": self.database.config.feature_dimensions,
             "artifacts": {},  # Will be populated selectively
+            "output_dir": self.output_dir,  # Add output directory for worker processes
         }
 
         # Include artifacts for programs that might be selected

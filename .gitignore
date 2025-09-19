@@ -54,3 +54,9 @@ htmlcov/
 secrets.yaml
 problems
 examples/online_judge_programming/.kattisrc
+
+# Tmp File
+*.tmp
+examples/code_optimization/*
+examples/code_optimization_template/config_web.yaml
+examples/code_optimization_template/local_config.yaml

@@ -302,9 +302,10 @@ class OpenEvolve:
             )
 
         # Initialize improved parallel processing
+        # 2025.9.19: Add output_dir to parallel controller
         try:
             self.parallel_controller = ProcessParallelController(
-                self.config, self.evaluation_file, self.database, self.evolution_tracer
+                self.config, self.evaluation_file, self.database, self.evolution_tracer, self.output_dir
             )
 
             # Set up signal handlers for graceful shutdown
