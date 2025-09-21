@@ -380,7 +380,8 @@ class ProcessParallelController:
         self.shutdown_event.set()
 
         if self.executor:
-            self.executor.shutdown(wait=True)
+            # 2025.9.20: Force to shutdown all the process
+            self.executor.shutdown(wait=False)  # Do not wait for all tasks to complete
             self.executor = None
 
         logger.info("Stopped process pool")

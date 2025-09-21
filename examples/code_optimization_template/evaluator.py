@@ -288,8 +288,7 @@ def evaluate(program_path: str) -> EvaluationResult:
         )
 
     pass_rate = float(passed) / float(total) if total > 0 else 0.0
-    # 2025.9.19: If the program is incorrect, then set the time and mem to 
-    # unlimited
+    # 2025.9.19: If the program is incorrect, then set the time and mem to infinite
     if pass_rate != 1:
         duration_sec = float("inf")
         peak_mb = float("inf")
@@ -349,7 +348,7 @@ def evaluate(program_path: str) -> EvaluationResult:
             if mod_name in sys.modules:
                 del sys.modules[mod_name]
 
-    # 归一化评分（优先相对基线，否则回退到固定参考常量）
+    # Calc the Normalized Score 
     # 2025.9.19: Implement Beyond metric (Mercury) temporarily
     def clamp(value, min_val, max_val):
         return max(min(value, max_val), min_val)
