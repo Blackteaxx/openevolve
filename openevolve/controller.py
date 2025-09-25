@@ -311,7 +311,9 @@ class OpenEvolve:
             # Set up signal handlers for graceful shutdown
             def signal_handler(signum, frame):
                 logger.info(f"Received signal {signum}, initiating graceful shutdown...")
-                self.parallel_controller.request_shutdown()
+                if self.parallel_controller:
+                    self.parallel_controller.request_shutdown()
+                    self.parallel_controller.request_shutdown()
 
                 # Set up a secondary handler for immediate exit if user presses Ctrl+C again
                 def force_exit_handler(signum, frame):
@@ -344,11 +346,17 @@ class OpenEvolve:
             )
 
         finally:
+            # Restore default signal handlers
+            signal.signal(signal.SIGINT, signal.SIG_DFL)
+            signal.signal(signal.SIGTERM, signal.SIG_DFL)
+
             # Clean up parallel processing resources
             if self.parallel_controller:
+                logger.info("Shutting down parallel controller...")
                 self.parallel_controller.stop()
+                logger.info("Parallel controller shut down.")
                 self.parallel_controller = None
-            
+
             # Close evolution tracer
             if self.evolution_tracer:
                 self.evolution_tracer.close()

@@ -1,4 +1,4 @@
-python openevolve-run.py examples/code_optimization/initial_program.py \
-  examples/code_optimization/evaluator.py \
-  --config examples/code_optimization/local_config.yaml \
-  --iterations 50
+python openevolve-run.py examples/code_optimization_template/initial_program.py \
+  examples/code_optimization_template/evaluator.py \
+  --config examples/code_optimization_template/config.yaml \
+  --iterations 20
