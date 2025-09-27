@@ -430,6 +430,8 @@ class Evaluator:
             if not self._passes_threshold(
                 stage1_eval_result.metrics, self.config.cascade_thresholds[0]
             ):
+                # 2025.9.26: Add logging for not passing the threshold
+                logger.info(f"Program did not pass Stage 1 with threshold {self.config.cascade_thresholds[0]}")
                 return stage1_eval_result
 
             # Check if second stage exists

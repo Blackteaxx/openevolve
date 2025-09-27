@@ -9,28 +9,28 @@ llm:
   max_tokens: 16000
   timeout: 120
 prompt:
-  system_message: "\"You are an expert programmer specializing in advanced algorithm\
-    \ design and implement, focus on correctness, time efficiency and memory efficiency.\
-    \ \n\nPlease based on the task description write Solution to pass the provided\
-    \ test cases. \nYou must follow the following rules:\nFirst, the code should be\
-    \ in ```python\\n[Code]\\n``` block.\nSecond, You should not add the provided\
-    \ test cases into your ```\\npython[Code]\\n``` block.\nThird, You are not need\
-    \ to write the test cases, we will provide the test cases for you.\nFinally, You\
-    \ should make sure that the provided test cases can pass your solution.\n\n\n\
-    # Task description:\nYou are given two non-empty linked lists representing two\
-    \ non-negative integers. The digits are stored in reverse order, and each of their\
-    \ nodes contains a single digit. Add the two numbers and return the sum as a linked\
-    \ list.\n\nYou may assume the two numbers do not contain any leading zero, except\
-    \ the number 0 itself.\n\n \nExample 1:\n\nInput: l1 = [2,4,3], l2 = [5,6,4]\n\
-    Output: [7,0,8]\nExplanation: 342 + 465 = 807.\n\n\nExample 2:\n\nInput: l1 =\
-    \ [0], l2 = [0]\nOutput: [0]\n\n\nExample 3:\n\nInput: l1 = [9,9,9,9,9,9,9], l2\
-    \ = [9,9,9,9]\nOutput: [8,9,9,9,0,0,0,1]\n\n\n \nConstraints:\n\n\n\tThe number\
-    \ of nodes in each linked list is in the range [1, 100].\n\t0 <= Node.val <= 9\n\
-    \tIt is guaranteed that the list represents a number that does not have leading\
-    \ zeros.\n\n\n\n\nIMPORTANT: Do not rewrite the entire program - focus on targeted\
-    \ improvements wrapped in EVOLVE-BLOCK-START and EVOLVE-BLOCK-START. And you must\
-    \ use <<<<<<< SEARCH, ======= and >>>>>> REPLACE diff format to change the code.\"\
-    \n"
+  system_message: "\"You are an expert competitive programmer specializing in advanced\
+    \ algorithm design and implementation, with strong focus on correctness, time\
+    \ efficiency, and memory efficiency.\n\nPlease carefully read the task description\
+    \ (a standard input/output competitive programming problem) and write a **Python\
+    \ solution** that:\n1. Reads from **stdin** (`sys.stdin` or `input()`).\n2. Writes\
+    \ the correct output to **stdout** (`print()`).\n3. Has no hard-coded test cases\
+    \ or extra print statements.\n4. Runs efficiently within typical contest constraints.\n\
+    \nYou must follow these additional rules:\n- The code must be enclosed in a single\
+    \ block: \n  ```python\n  [Code]\n````\n\n* Do **not** include provided test cases\
+    \ inside the code block.\n* Do **not** generate your own test cases; assume the\
+    \ system will provide them via stdin.\n* Ensure the solution passes the official\
+    \ test cases.\n\nIMPORTANT:\n\n* This is an **evolution setting**. Do not rewrite\
+    \ the entire program from scratch.\n* Focus only on targeted improvements, and\
+    \ wrap them with `EVOLVE-BLOCK-START` / `EVOLVE-BLOCK-END`.\n* All changes must\
+    \ be expressed in the `<<<<<<< SEARCH`, `=======`, `>>>>>>> REPLACE` diff format.\n\
+    \n# Task description:\n\nProblem Statement\nFind the number of positive integers\
+    \ not greater than\nN\nthat have exactly\n9\npositive divisors.\nConstraints\n\
+    1 \\leq N \\leq 4 \\times 10^{12}\nAll input values are integers.\nInput\nThe\
+    \ input is given from Standard Input in the following format:\nN\nOutput\nPrint\
+    \ the answer.\nSample Input 1\n200\nSample Output 1\n3\nThree positive integers\n\
+    36,100,196\nsatisfy the condition.\nSample Input 2\n4000000000000\nSample Output\
+    \ 2\n407073\"\n"
   template_dir: /data/CodeEfficiency/openevolve/openevolve/prompts/defaults
 database:
   population_size: 50
@@ -40,8 +40,9 @@ database:
   exploitation_ratio: 0.7
   log_prompts: true
 evaluator:
-  timeout: 60
+  timeout: 300
   enable_artifacts: true
+  cascade_evaluation: false 
   parallel_evaluations: 2
 diff_based_evolution: true
 max_code_length: 20000

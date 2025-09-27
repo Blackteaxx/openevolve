@@ -1,0 +1,8 @@
+language: # python3, java, go, c++, ruby
+task_data_path:  # path to the task data file
+
+time_limit: 3
+memory_limit: 1024
+num_runs: 30
+trimming_fraction: 0.2
+max_workers: 4

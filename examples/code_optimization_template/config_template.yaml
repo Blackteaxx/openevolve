@@ -1,6 +1,7 @@
 # Configuration for code minimization example
-max_iterations: 50
+max_iterations: 80
 checkpoint_interval: 5
+language: python
 
 llm:
   primary_model: "Qwen3-8B"
@@ -8,31 +9,49 @@ llm:
 
   api_base: http://127.0.0.1:8080/v1
   api_key: code-efficiency                     
-  temperature: 0.7
-  max_tokens: 16000
+  temperature: 0.4
+  max_tokens: 8000
   timeout: 120
 
 # Prompt configuration
 prompt:
   # 2025.9.17: Shed light on some requirements
   system_message: |
-    "You are an expert programmer specializing in advanced algorithm design and implement, focus on correctness, time efficiency and memory efficiency. 
-    
-    Please based on the task description write Solution to pass the provided test cases. 
-    You must follow the following rules:
-    First, the code should be in ```python\n[Code]\n``` block.
-    Second, You should not add the provided test cases into your ```\npython[Code]\n``` block.
-    Third, You are not need to write the test cases, we will provide the test cases for you.
-    Finally, You should make sure that the provided test cases can pass your solution.
+    "You are an expert competitive programmer specializing in advanced algorithm design and implementation, with strong focus on correctness, time efficiency, and memory efficiency.
 
+    Please carefully read the task description (a standard input/output competitive programming problem) and write a **Python solution** that:
+    1. Reads from **stdin** (`sys.stdin` or `input()`).
+    2. Writes the correct output to **stdout** (`print()`).
+    3. Has no hard-coded test cases or extra print statements.
+    4. Runs efficiently within typical contest constraints.
+
+    You must follow these additional rules:
+    - The code must be enclosed in a single block: 
+      ```python
+      [Code]
+    ````
+
+    * Do **not** include provided test cases inside the code block.
+    * Do **not** generate your own test cases; assume the system will provide them via stdin.
+    * Ensure the solution passes the official test cases.
+
+    IMPORTANT:
+
+    * This is an **evolution setting**. Do not rewrite the entire program from scratch.
+    * Focus only on targeted improvements, and wrap them with `EVOLVE-BLOCK-START` / `EVOLVE-BLOCK-END`.
+    * All changes must be expressed in the `<<<<<<< SEARCH`, `=======`, `>>>>>>> REPLACE` diff format.
 
     # Task description:
-    {task_description}
 
-    IMPORTANT: Do not rewrite the entire program - focus on targeted improvements wrapped in EVOLVE-BLOCK-START and EVOLVE-BLOCK-START. And you must use <<<<<<< SEARCH, ======= and >>>>>> REPLACE diff format to change the code."
-  
+    {task_description}"
+
   # 2025.9.17: Add Template Dir
   template_dir: "/data/CodeEfficiency/openevolve/openevolve/prompts/defaults"
+
+  # 2025.9.26: Add num_top_programs and num_diverse_programs
+  num_top_programs: 1
+  num_diverse_programs: 2
+  include_artifacts: true
 
 # Database configuration
 database:
@@ -45,9 +64,10 @@ database:
 
 # Evaluator configuration
 evaluator:
-  timeout: 300
+  timeout: 600
   enable_artifacts: true      # Error feedback to LLM
-  # cascade_thresholds: [1.3]
+  cascade_evaluation: true
+  cascade_thresholds: [0.6]   # Set as the weight of pass rate to decide if the solution passes the cascade evaluation
   parallel_evaluations: 2
 
 # Evolution settings

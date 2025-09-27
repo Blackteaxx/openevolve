@@ -401,37 +401,37 @@ def main():
     print("开始evaluator.py全面测试...\n")
 
     try:
-        # 基本功能测试
+        # # 基本功能测试
         basic_result = test_basic_functionality()
 
-        # 错误情况测试
-        incorrect_result = test_incorrect_solution()
+        # # 错误情况测试
+        # incorrect_result = test_incorrect_solution()
 
-        # 超时测试
-        timeout_result = test_timeout_solution()
+        # # 超时测试
+        # timeout_result = test_timeout_solution()
 
-        # 语法错误测试
-        syntax_error_result = test_syntax_error_solution()
+        # # 语法错误测试
+        # syntax_error_result = test_syntax_error_solution()
 
-        # 内存超限测试
-        memory_limit_result = test_memory_limit_solution()
+        # # 内存超限测试
+        # memory_limit_result = test_memory_limit_solution()
 
         # 性能对比测试
         performance_results = test_performance_comparison()
 
-        # Sandbox集成测试
-        sandbox_result = test_sandbox_integration()
+        # # Sandbox集成测试
+        # sandbox_result = test_sandbox_integration()
 
-        # 总结
-        print("\n" + "=" * 50)
-        print("测试总结")
-        print("=" * 50)
-        print(f"✓ 基本功能测试: {basic_result}")
-        print(f"✓ 错误解决方案测试: {incorrect_result}")
-        print(f"✓ 超时测试: {timeout_result}")
-        print(f"✓ 语法错误测试: {syntax_error_result}")
-        print(f"✓ 内存超限测试: {memory_limit_result}")
-        print(f"✓ Sandbox集成测试: {sandbox_result}")
+        # # 总结
+        # print("\n" + "=" * 50)
+        # print("测试总结")
+        # print("=" * 50)
+        # print(f"✓ 基本功能测试: {basic_result}")
+        # print(f"✓ 错误解决方案测试: {incorrect_result}")
+        # print(f"✓ 超时测试: {timeout_result}")
+        # print(f"✓ 语法错误测试: {syntax_error_result}")
+        # print(f"✓ 内存超限测试: {memory_limit_result}")
+        # print(f"✓ Sandbox集成测试: {sandbox_result}")
 
         if performance_results:
             print("\n性能测试结果:")

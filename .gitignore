@@ -57,12 +57,8 @@ examples/online_judge_programming/.kattisrc
 
 # Tmp File
 *.tmp
-examples/code_optimization/
-examples/code_optimization_template_no_sandbox/
-examples/code_optimization_qwen8B_init/
-examples/code_optimization_qwen8B-2/
-examples/code_optimization_template/config_web.yaml
-examples/code_optimization_template/local_config.yaml
+examples/effibench_code_optimization/
+examples/archive/
 
 # artifacts
 artifacts/

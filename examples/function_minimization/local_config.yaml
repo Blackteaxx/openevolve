@@ -5,11 +5,11 @@ checkpoint_interval: 5
 # LLM configuration
 # 2025.9.17: Adapt local model
 llm:
-  primary_model: "deepseek-coder-1.3b-instruct"
-  primary_model_weight: 0.6
+  primary_model: "Qwen3-8B"
+  primary_model_weight: 1
 
-  secondary_model: "qwen2.5-coder-7B-Instruct"
-  secondary_model_weight: 0.4
+  # secondary_model: "qwen2.5-coder-7B-Instruct"
+  # secondary_model_weight: 0.4
 
   api_base: http://127.0.0.1:8080/v1
   api_key: code-efficiency                     
