@@ -1,13 +1,7 @@
-import os
-import sys
-
-# Add project root to Python path to allow direct execution
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
 import json
+import logging
 import math
+import os
 from typing import Any, Dict
 
 import yaml
@@ -17,6 +11,8 @@ import yaml
 # The openevolve runner should handle the python path.
 from openevolve.effibench.benchmark import run_performance_benchmark
 from openevolve.evaluation_result import EvaluationResult
+
+logger = logging.getLogger(__name__)
 
 
 def load_config(file_path: str) -> Dict[str, Any]:
@@ -31,7 +27,9 @@ def load_problem_data(file_path: str) -> Dict[str, Any]:
         return json.load(f)
 
 
-def evaluate(program_path: str, num_runs_override: int | None = None) -> EvaluationResult:
+def evaluate(
+    program_path: str, num_runs_override: int | None = None
+) -> EvaluationResult:
     """
     Evaluates the given program using the performance benchmark.
 
@@ -69,11 +67,15 @@ def evaluate(program_path: str, num_runs_override: int | None = None) -> Evaluat
     time_limit = problem_config["time_limit"]
     memory_limit = problem_config["memory_limit"]
     # Use override if provided, otherwise use config value
-    num_runs = num_runs_override if num_runs_override is not None else problem_config["num_runs"]
+    num_runs = (
+        num_runs_override
+        if num_runs_override is not None
+        else problem_config["num_runs"]
+    )
     trimming_fraction = problem_config["trimming_fraction"]
     max_workers = problem_config["max_workers"]
 
-    print("evaluate: Calling run_performance_benchmark...")
+    logger.info("evaluate: Calling run_performance_benchmark...")
     # Run the performance benchmark
     benchmark_results = run_performance_benchmark(
         lang=lang,
@@ -87,7 +89,7 @@ def evaluate(program_path: str, num_runs_override: int | None = None) -> Evaluat
         trim_ratio=trimming_fraction,
         max_workers=max_workers,
     )
-    print("evaluate: run_performance_benchmark finished.")
+    logger.info("evaluate: run_performance_benchmark finished.")
 
     performance_metrics = benchmark_results["performance_analysis"]
     failed_test_details = benchmark_results["failed_test_details"]
@@ -100,27 +102,43 @@ def evaluate(program_path: str, num_runs_override: int | None = None) -> Evaluat
         time_score = 0.0
         combined_score = 0.6 * pass_rate + 0.4 * time_score
 
-        # Extract details from the first failed test case for the main error message
-        first_failure = failed_test_details[0]
-        error_status = first_failure.get("status", "unknown")
-        error_text = first_failure.get("text", "No additional error text.")
+        # Aggregate details from all failed test cases to provide a comprehensive report
+        # Group failures by status and provide one representative example for each
+        representative_failures = {}
+        for failure in failed_test_details:
+            status = failure.get("status", "unknown")
+            if status not in representative_failures:
+                representative_failures[status] = failure
+
+        failure_details_summary = []
+        for status, failure in representative_failures.items():
+            text = failure.get("text", "No additional error text.")
+            if len(text) > 150:
+                text = text[:150] + "..."
+            failure_details_summary.append(f"- Status: {status}, Details: {text}")
+
+        # Join the summaries for a comprehensive error message
+        failures_text = "\n".join(failure_details_summary)
+
+        # Consolidate all unique failure statuses for a clear summary
+        all_statuses = ", ".join(representative_failures.keys())
 
         error_artifacts = {
-            "error_type": f"SolutionFailedTests (status: {error_status})",
-            "error_message": f"Solution passed {pass_rate:.2%} of test cases. First failure: {error_text}",
+            "error_type": f"SolutionFailedTests (statuses: {all_statuses})",
+            "error_message": f"Solution passed {pass_rate:.2%} of test cases. Failure details:\n{failures_text}",
             "suggestion": "Review the solution to ensure it correctly handles all test cases, including edge cases.",
             "failed_tests": failed_test_details,  # Include all failure details
         }
 
-        print("evaluate: Returning error result.")
+        logger.info("evaluate: Returning error result.")
         # Return a failing result with a score of 0
         return EvaluationResult(
             metrics={
                 "pass_rate": pass_rate,
-                "trimmed_mean_runtime": float("inf"),
+                "trimmed_mean_runtime": "Infinity",
                 "time_score": time_score,
                 "combined_score": combined_score,
-                "error": f"Solution failed in some test cases. Error: {error_text}",
+                "error": f"Solution failed {len(failed_test_details)} test case(s) with statuses: {all_statuses}. See artifacts for details.",
             },
             artifacts=error_artifacts,
         )
@@ -152,8 +170,9 @@ def evaluate(program_path: str, num_runs_override: int | None = None) -> Evaluat
 def evaluate_stage1(program_path):
     """
     First stage evaluation with a single trial to check for basic correctness.
-    The main framework will use the combined_score from this result
-    to decide if it passes the threshold for the next stage.
+    The main framework will use the `combined_score` from this result
+    to decide if it passes the threshold(defined in config.yaml)
+    for the next stage.
     """
     # Run with just one trial to quickly check for pass/fail.
     return evaluate(program_path, num_runs_override=1)

@@ -58,7 +58,7 @@ def run_performance_benchmark(
                 early_stop=False,  # We need to run all tests for performance
                 raise_on_error=False,
                 as_batch=True,
-                polling_interval=30,
+                polling_interval=10,
             )
             for _ in range(num_runs)
         ]
