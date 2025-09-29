@@ -266,7 +266,8 @@ class Evaluator:
                         "error_type": "timeout",
                     }
 
-                return {"error": 0.0, "timeout": True}
+                # 2025.9.29: Add combined_score of time out, indicating the worst performance
+                return {"error": 0.0, "timeout": True, "combined_score": 0} 
 
             except Exception as e:
                 last_exception = e

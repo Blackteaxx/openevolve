@@ -157,7 +157,7 @@ def _run_iteration_worker(
         # Use config values for limits instead of hardcoding
         # Programs for LLM display (includes both top and diverse for inspiration)
         programs_for_prompt = island_programs[
-            : _worker_config.prompt.num_top_programs + _worker_config.prompt.num_diverse_programs
+            : _worker_config.prompt.num_top_programs # 2025.9.29: revise from num_top_programs + num_diverse_programs to num_top_programs
         ]
         # Best programs only (for previous attempts section, focused on top performers)
         best_programs_only = island_programs[: _worker_config.prompt.num_top_programs]
@@ -741,7 +741,7 @@ class ProcessParallelController:
             # This fixes the race condition from GitHub issue #246
             parent, inspirations = self.database.sample_from_island(
                 island_id=target_island,
-                num_inspirations=self.config.prompt.num_top_programs
+                num_inspirations=self.config.prompt.num_diverse_programs # 2025.9.29: revise from num_top_programs to num_diverse_programs
             )
 
             # Create database snapshot
