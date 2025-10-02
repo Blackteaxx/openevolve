@@ -297,7 +297,6 @@ class TestPromptArtifacts(unittest.TestCase):
             current_program="print('test')",
             parent_program="print('test')",
             program_metrics={"score": 0.5},
-            previous_programs=[],
             top_programs=[],
             program_artifacts=artifacts,
         )
@@ -312,7 +311,6 @@ class TestPromptArtifacts(unittest.TestCase):
             current_program="print('test')",
             parent_program="print('test')",
             program_metrics={"score": 0.5},
-            previous_programs=[],
             top_programs=[],
         )
 

@@ -20,13 +20,6 @@ class TestPromptSampler(unittest.TestCase):
         current_program = "def test(): pass"
         parent_program = "def test(): pass"
         program_metrics = {"score": 0.5}
-        previous_programs = [
-            {
-                "id": "prev1",
-                "code": "def prev1(): pass",
-                "metrics": {"score": 0.4},
-            }
-        ]
         top_programs = [
             {
                 "id": "top1",
@@ -39,7 +32,6 @@ class TestPromptSampler(unittest.TestCase):
             current_program=current_program,
             parent_program=parent_program,
             program_metrics=program_metrics,
-            previous_programs=previous_programs,
             top_programs=top_programs,
         )
 

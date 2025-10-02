@@ -205,3 +205,31 @@ def extract_code_language(code: str) -> str:
         return "sql"
 
     return "unknown"
+
+
+def extract_explanation(text: str) -> Optional[str]:
+    """
+    Extract an explanation section from LLM response.
+
+    Looks for a section starting with a line titled 'Explanation:' and
+    captures everything after it to the end, stripping any fenced code blocks.
+
+    Args:
+        text: Full LLM response text
+
+    Returns:
+        Cleaned explanation string or None if not found
+    """
+    # Find the Explanation header (case-insensitive, at line start)
+    match = re.search(r"(?im)^Explanation\s*:\s*(?:\r?\n)(.*)$", text, re.DOTALL)
+    if not match:
+        return None
+
+    explanation = match.group(1).strip()
+
+    # Strip fenced code blocks if any slipped in
+    explanation = re.sub(r"```.*?```", "", explanation, flags=re.DOTALL)
+
+    # Collapse excessive whitespace
+    explanation = re.sub(r"\n{3,}", "\n\n", explanation)
+    return explanation.strip() or None

@@ -161,7 +161,6 @@ def evaluate_stage1(program_path):
                 current_program=bad_code,
                 parent_program=bad_code,
                 program_metrics=metrics,
-                previous_programs=[],
                 top_programs=[],
                 program_artifacts=stored_artifacts,
             )

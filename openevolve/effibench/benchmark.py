@@ -5,7 +5,8 @@ from typing import Any, Dict, List
 from .analysis import analyze_runtimes
 from .run_tests import run_tests
 
-os.environ["BACKEND_BASE_URL"] = "http://10.52.10.118:8000"
+# os.environ["BACKEND_BASE_URL"] = "http://10.52.10.118:8000"
+os.environ["BACKEND_BASE_URL"] = "http://146.56.216.99:8000"
 
 
 def run_performance_benchmark(

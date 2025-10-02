@@ -6,8 +6,9 @@ import asyncio
 import logging
 import multiprocessing as mp
 import time
-from concurrent.futures import ProcessPoolExecutor, Future, TimeoutError as FutureTimeoutError
-from dataclasses import dataclass, asdict
+from concurrent.futures import Future, ProcessPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
+from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional
 
 from openevolve.config import Config
@@ -31,14 +32,16 @@ class SerializableResult:
     error: Optional[str] = None
 
 
-def _worker_init(config_dict: dict, evaluation_file: str, parent_env: dict = None) -> None:
+def _worker_init(
+    config_dict: dict, evaluation_file: str, parent_env: dict = None
+) -> None:
     """Initialize worker process with necessary components"""
     import os
-    
+
     # Set environment from parent process
     if parent_env:
         os.environ.update(parent_env)
-    
+
     global _worker_config
     global _worker_evaluation_file
     global _worker_evaluator
@@ -52,13 +55,15 @@ def _worker_init(config_dict: dict, evaluation_file: str, parent_env: dict = Non
         DatabaseConfig,
         EvaluatorConfig,
         LLMConfig,
-        PromptConfig,
         LLMModelConfig,
+        PromptConfig,
     )
 
     # Reconstruct model objects
     models = [LLMModelConfig(**m) for m in config_dict["llm"]["models"]]
-    evaluator_models = [LLMModelConfig(**m) for m in config_dict["llm"]["evaluator_models"]]
+    evaluator_models = [
+        LLMModelConfig(**m) for m in config_dict["llm"]["evaluator_models"]
+    ]
 
     # Create LLM config with models
     llm_dict = config_dict["llm"].copy()
@@ -126,7 +131,10 @@ def _lazy_init_worker_components():
 
 
 def _run_iteration_worker(
-    iteration: int, db_snapshot: Dict[str, Any], parent_id: str, inspiration_ids: List[str]
+    iteration: int,
+    db_snapshot: Dict[str, Any],
+    parent_id: str,
+    inspiration_ids: List[str],
 ) -> SerializableResult:
     """Run a single iteration in a worker process"""
     try:
@@ -134,42 +142,61 @@ def _run_iteration_worker(
         _lazy_init_worker_components()
 
         # Reconstruct programs from snapshot
-        programs = {pid: Program(**prog_dict) for pid, prog_dict in db_snapshot["programs"].items()}
+        programs = {
+            pid: Program(**prog_dict)
+            for pid, prog_dict in db_snapshot["programs"].items()
+        }
 
         parent = programs[parent_id]
         inspirations = [programs[pid] for pid in inspiration_ids if pid in programs]
 
         # Get parent artifacts if available
         parent_artifacts = db_snapshot["artifacts"].get(parent_id)
+        
+        # Get parent program of current program
+        grand_parent_id = parent.parent_id
+        grand_parent = None
+        if grand_parent_id and grand_parent_id in programs:
+            grand_parent = programs[grand_parent_id]
 
         # Get island-specific programs for context
         parent_island = parent.metadata.get("island", db_snapshot["current_island"])
         island_programs = [
-            programs[pid] for pid in db_snapshot["islands"][parent_island] if pid in programs
+            programs[pid]
+            for pid in db_snapshot["islands"][parent_island]
+            if pid in programs
         ]
 
         # Sort by metrics for top programs
         island_programs.sort(
-            key=lambda p: p.metrics.get("combined_score", safe_numeric_average(p.metrics)),
+            key=lambda p: p.metrics.get(
+                "combined_score", safe_numeric_average(p.metrics)
+            ),
             reverse=True,
         )
 
         # Use config values for limits instead of hardcoding
-        # Programs for LLM display (includes both top and diverse for inspiration)
         programs_for_prompt = island_programs[
-            : _worker_config.prompt.num_top_programs # 2025.9.29: revise from num_top_programs + num_diverse_programs to num_top_programs
+            : _worker_config.prompt.num_top_programs  # 2025.9.29: revise from num_top_programs + num_diverse_programs to num_top_programs
         ]
-        # Best programs only (for previous attempts section, focused on top performers)
-        best_programs_only = island_programs[: _worker_config.prompt.num_top_programs]
-
+        
         # Build prompt
+        # 变更说明：
+        # - 不再传入 previous_programs（用户建议去掉）
+        # - 直接传入 parent_metrics 以供 Top Block 的 Parent vs Current 计算使用
+        # - 传入 current_explanation（若存在），在顶部 Current Program 下展示
         prompt = _worker_prompt_sampler.build_prompt(
             current_program=parent.code,
-            parent_program=parent.code,
             program_metrics=parent.metrics,
-            previous_programs=[p.to_dict() for p in best_programs_only],
+            current_explanation=parent.metadata.get("explanation"),
+            # 使用祖父程序（parent 的 parent）作为对照基线
+            parent_program=grand_parent.code if grand_parent else None,
+            # 指标对比也改为祖父的指标
+            parent_metrics=grand_parent.metrics if grand_parent else None,
+
             top_programs=[p.to_dict() for p in programs_for_prompt],
             inspirations=[p.to_dict() for p in inspirations],
+            
             language=_worker_config.language,
             evolution_round=iteration,
             diff_based_evolution=_worker_config.diff_based_evolution,
@@ -189,36 +216,55 @@ def _run_iteration_worker(
             )
         except Exception as e:
             logger.error(f"LLM generation failed: {e}")
-            return SerializableResult(error=f"LLM generation failed: {str(e)}", iteration=iteration)
+            return SerializableResult(
+                error=f"LLM generation failed: {str(e)}", iteration=iteration
+            )
 
         # Check for None response
         if llm_response is None:
-            return SerializableResult(error="LLM returned None response", iteration=iteration)
+            return SerializableResult(
+                error="LLM returned None response", iteration=iteration
+            )
 
         # Parse response based on evolution mode
+        explanation_text = None
         if _worker_config.diff_based_evolution:
-            from openevolve.utils.code_utils import extract_diffs, apply_diff, format_diff_summary
+            from openevolve.utils.code_utils import (
+                apply_diff,
+                extract_diffs,
+                format_diff_summary,
+                extract_explanation,
+            )
 
             diff_blocks = extract_diffs(llm_response)
-            
+
             # 2025.9.17: Add Prompt Log - Custom logger for prompt flow
             prompt_flow_logger = logging.getLogger("prompt_flow")
             if not prompt_flow_logger.handlers:
                 # Create file handler for prompt flow log
                 import os
+
                 output_dir = db_snapshot.get("output_dir")
                 if output_dir:
                     prompt_flow_log_path = os.path.join(output_dir, "prompt_flow.log")
                 else:
-                    prompt_flow_log_path = "prompt_flow.log"  # Fallback to current directory
-                prompt_handler = logging.FileHandler(prompt_flow_log_path, encoding="utf-8")
+                    prompt_flow_log_path = (
+                        "prompt_flow.log"  # Fallback to current directory
+                    )
+                prompt_handler = logging.FileHandler(
+                    prompt_flow_log_path, encoding="utf-8"
+                )
                 prompt_handler.setLevel(logging.INFO)
-                prompt_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+                prompt_formatter = logging.Formatter(
+                    "%(asctime)s - %(levelname)s - %(message)s"
+                )
                 prompt_handler.setFormatter(prompt_formatter)
                 prompt_flow_logger.addHandler(prompt_handler)
                 prompt_flow_logger.setLevel(logging.INFO)
-                prompt_flow_logger.propagate = False  # Prevent propagation to root logger
-            
+                prompt_flow_logger.propagate = (
+                    False  # Prevent propagation to root logger
+                )
+
             prompt_flow_logger.info("=" * 80)
             prompt_flow_logger.info(f"Iteration: {iteration}")
             prompt_flow_logger.info(f"\nLLM system message: {prompt['system']}")
@@ -229,7 +275,7 @@ def _run_iteration_worker(
             else:
                 prompt_flow_logger.info("\nLLM generated no valid diffs")
             prompt_flow_logger.info("=" * 80)
-            
+
             if not diff_blocks:
                 return SerializableResult(
                     error="No valid diffs found in response", iteration=iteration
@@ -237,8 +283,9 @@ def _run_iteration_worker(
 
             child_code = apply_diff(parent.code, llm_response)
             changes_summary = format_diff_summary(diff_blocks)
+            explanation_text = extract_explanation(llm_response)
         else:
-            from openevolve.utils.code_utils import parse_full_rewrite
+            from openevolve.utils.code_utils import parse_full_rewrite, extract_explanation
 
             new_code = parse_full_rewrite(llm_response, _worker_config.language)
             if not new_code:
@@ -248,6 +295,7 @@ def _run_iteration_worker(
 
             child_code = new_code
             changes_summary = "Full rewrite"
+            explanation_text = extract_explanation(llm_response)
 
         # Check code length
         if len(child_code) > _worker_config.max_code_length:
@@ -257,15 +305,26 @@ def _run_iteration_worker(
             )
 
         # Evaluate the child program
+        # This stage will be very time-consuming in Code Optimization Task
         import uuid
 
         child_id = str(uuid.uuid4())
-        child_metrics = asyncio.run(_worker_evaluator.evaluate_program(child_code, child_id))
+        child_metrics = asyncio.run(
+            _worker_evaluator.evaluate_program(child_code, child_id)
+        )
 
         # Get artifacts
         artifacts = _worker_evaluator.get_pending_artifacts(child_id)
 
         # Create child program
+        metadata = {
+            "changes": changes_summary,
+            "parent_metrics": parent.metrics,
+            "island": parent_island,
+        }
+        if explanation_text:
+            metadata["explanation"] = explanation_text
+
         child_program = Program(
             id=child_id,
             code=child_code,
@@ -274,11 +333,7 @@ def _run_iteration_worker(
             generation=parent.generation + 1,
             metrics=child_metrics,
             iteration_found=iteration,
-            metadata={
-                "changes": changes_summary,
-                "parent_metrics": parent.metrics,
-                "island": parent_island,
-            },
+            metadata=metadata,
         )
 
         iteration_time = time.time() - iteration_start
@@ -301,7 +356,14 @@ def _run_iteration_worker(
 class ProcessParallelController:
     """Controller for process-based parallel evolution"""
 
-    def __init__(self, config: Config, evaluation_file: str, database: ProgramDatabase, evolution_tracer=None, output_dir: str = None):
+    def __init__(
+        self,
+        config: Config,
+        evaluation_file: str,
+        database: ProgramDatabase,
+        evolution_tracer=None,
+        output_dir: str = None,
+    ):
         self.config = config
         self.evaluation_file = evaluation_file
         self.database = database
@@ -324,7 +386,9 @@ class ProcessParallelController:
             island_id = worker_id % self.num_islands
             self.worker_island_map[worker_id] = island_id
 
-        logger.info(f"Initialized process parallel controller with {self.num_workers} workers")
+        logger.info(
+            f"Initialized process parallel controller with {self.num_workers} workers"
+        )
         logger.info(f"Worker-to-island mapping: {self.worker_island_map}")
 
     def _serialize_config(self, config: Config) -> dict:
@@ -364,8 +428,9 @@ class ProcessParallelController:
 
         # Pass current environment to worker processes
         import os
+
         current_env = dict(os.environ)
-        
+
         # Create process pool with initializer
         self.executor = ProcessPoolExecutor(
             max_workers=self.num_workers,
@@ -395,7 +460,9 @@ class ProcessParallelController:
         """Create a serializable snapshot of the database state"""
         # Only include necessary data for workers
         snapshot = {
-            "programs": {pid: prog.to_dict() for pid, prog in self.database.programs.items()},
+            "programs": {
+                pid: prog.to_dict() for pid, prog in self.database.programs.items()
+            },
             "islands": [list(island) for island in self.database.islands],
             "current_island": self.database.current_island,
             "feature_dimensions": self.database.config.feature_dimensions,
@@ -441,7 +508,9 @@ class ProcessParallelController:
         batch_size = min(self.num_workers * 2, max_iterations)
 
         # Submit initial batch - distribute across islands
-        batch_per_island = max(1, batch_size // self.num_islands) if batch_size > 0 else 0
+        batch_per_island = (
+            max(1, batch_size // self.num_islands) if batch_size > 0 else 0
+        )
         current_iteration = start_iteration
 
         # Round-robin distribution across islands
@@ -451,7 +520,7 @@ class ProcessParallelController:
                     # Note: Submit iteration to process pool, which starts mission
                     # This will block if process pool is full, but that's fine
                     # as we're distributing evenly across islands
-                    future = self._submit_iteration(current_iteration, island_id) 
+                    future = self._submit_iteration(current_iteration, island_id)
                     if future:
                         pending_futures[current_iteration] = future
                         island_pending[island_id].append(current_iteration)
@@ -461,7 +530,9 @@ class ProcessParallelController:
         completed_iterations = 0
 
         # Island management
-        programs_per_island = max(1, max_iterations // (self.config.database.num_islands * 10))
+        programs_per_island = max(
+            1, max_iterations // (self.config.database.num_islands * 10)
+        )
         current_island_counter = 0
 
         # Early stopping tracking
@@ -503,7 +574,9 @@ class ProcessParallelController:
                 result = future.result(timeout=timeout_seconds)
 
                 if result.error:
-                    logger.warning(f"Iteration {completed_iteration} error: {result.error}")
+                    logger.warning(
+                        f"Iteration {completed_iteration} error: {result.error}"
+                    )
                 elif result.child_program_dict:
                     # Reconstruct program from dict
                     child_program = Program(**result.child_program_dict)
@@ -514,16 +587,24 @@ class ProcessParallelController:
 
                     # Store artifacts
                     if result.artifacts:
-                        self.database.store_artifacts(child_program.id, result.artifacts)
-                    
+                        self.database.store_artifacts(
+                            child_program.id, result.artifacts
+                        )
+
                     # Log evolution trace
                     if self.evolution_tracer:
                         # Retrieve parent program for trace logging
-                        parent_program = self.database.get(result.parent_id) if result.parent_id else None
+                        parent_program = (
+                            self.database.get(result.parent_id)
+                            if result.parent_id
+                            else None
+                        )
                         if parent_program:
                             # Determine island ID
-                            island_id = child_program.metadata.get("island", self.database.current_island)
-                            
+                            island_id = child_program.metadata.get(
+                                "island", self.database.current_island
+                            )
+
                             self.evolution_tracer.log_trace(
                                 iteration=completed_iteration,
                                 parent_program=parent_program,
@@ -534,8 +615,10 @@ class ProcessParallelController:
                                 island_id=island_id,
                                 metadata={
                                     "iteration_time": result.iteration_time,
-                                    "changes": child_program.metadata.get("changes", ""),
-                                }
+                                    "changes": child_program.metadata.get(
+                                        "changes", ""
+                                    ),
+                                },
                             )
 
                     # Log prompts
@@ -548,7 +631,9 @@ class ProcessParallelController:
                             ),
                             program_id=child_program.id,
                             prompt=result.prompt,
-                            responses=[result.llm_response] if result.llm_response else [],
+                            responses=[result.llm_response]
+                            if result.llm_response
+                            else [],
                         )
 
                     # Island management
@@ -558,14 +643,18 @@ class ProcessParallelController:
                     ):
                         self.database.next_island()
                         current_island_counter = 0
-                        logger.debug(f"Switched to island {self.database.current_island}")
+                        logger.debug(
+                            f"Switched to island {self.database.current_island}"
+                        )
 
                     current_island_counter += 1
                     self.database.increment_island_generation()
 
                     # Check migration
                     if self.database.should_migrate():
-                        logger.info(f"Performing migration at iteration {completed_iteration}")
+                        logger.info(
+                            f"Performing migration at iteration {completed_iteration}"
+                        )
                         self.database.migrate_programs()
                         self.database.log_island_status()
 
@@ -580,7 +669,9 @@ class ProcessParallelController:
                     if child_program.metrics:
                         metrics_str = ", ".join(
                             [
-                                f"{k}={v:.4f}" if isinstance(v, (int, float)) else f"{k}={v}"
+                                f"{k}={v:.4f}"
+                                if isinstance(v, (int, float))
+                                else f"{k}={v}"
                                 for k, v in child_program.metrics.items()
                             ]
                         )
@@ -626,7 +717,9 @@ class ProcessParallelController:
                     # Check target score
                     if target_score is not None and child_program.metrics:
                         numeric_metrics = [
-                            v for v in child_program.metrics.values() if isinstance(v, (int, float))
+                            v
+                            for v in child_program.metrics.values()
+                            if isinstance(v, (int, float))
                         ]
                         if numeric_metrics:
                             avg_score = sum(numeric_metrics) / len(numeric_metrics)
@@ -641,7 +734,9 @@ class ProcessParallelController:
                         # Get the metric to track for early stopping
                         current_score = None
                         if self.config.early_stopping_metric in child_program.metrics:
-                            current_score = child_program.metrics[self.config.early_stopping_metric]
+                            current_score = child_program.metrics[
+                                self.config.early_stopping_metric
+                            ]
                         elif self.config.early_stopping_metric == "combined_score":
                             # Default metric not found, use safe average (standard pattern)
                             current_score = safe_numeric_average(child_program.metrics)
@@ -652,7 +747,9 @@ class ProcessParallelController:
                             )
                             current_score = safe_numeric_average(child_program.metrics)
 
-                        if current_score is not None and isinstance(current_score, (int, float)):
+                        if current_score is not None and isinstance(
+                            current_score, (int, float)
+                        ):
                             # Check for improvement
                             improvement = current_score - best_score
                             if improvement >= self.config.convergence_threshold:
@@ -689,7 +786,9 @@ class ProcessParallelController:
                 # Cancel the future to clean up the process
                 future.cancel()
             except Exception as e:
-                logger.error(f"Error processing result from iteration {completed_iteration}: {e}")
+                logger.error(
+                    f"Error processing result from iteration {completed_iteration}: {e}"
+                )
 
             completed_iterations += 1
 
@@ -721,7 +820,9 @@ class ProcessParallelController:
 
         # Log completion reason
         if self.early_stopping_triggered:
-            logger.info("✅ Evolution completed - Early stopping triggered due to convergence")
+            logger.info(
+                "✅ Evolution completed - Early stopping triggered due to convergence"
+            )
         elif self.shutdown_event.is_set():
             logger.info("✅ Evolution completed - Shutdown requested")
         else:
@@ -735,18 +836,22 @@ class ProcessParallelController:
         """Submit an iteration to the process pool, optionally pinned to a specific island"""
         try:
             # Use specified island or current island
-            target_island = island_id if island_id is not None else self.database.current_island
+            target_island = (
+                island_id if island_id is not None else self.database.current_island
+            )
 
             # Use thread-safe sampling that doesn't modify shared state
             # This fixes the race condition from GitHub issue #246
             parent, inspirations = self.database.sample_from_island(
                 island_id=target_island,
-                num_inspirations=self.config.prompt.num_diverse_programs # 2025.9.29: revise from num_top_programs to num_diverse_programs
+                num_inspirations=self.config.prompt.num_diverse_programs,  # 2025.9.29: revise from num_top_programs to num_diverse_programs
             )
 
             # Create database snapshot
             db_snapshot = self._create_database_snapshot()
-            db_snapshot["sampling_island"] = target_island  # Mark which island this is for
+            db_snapshot["sampling_island"] = (
+                target_island  # Mark which island this is for
+            )
 
             # Submit to process pool
             future = self.executor.submit(

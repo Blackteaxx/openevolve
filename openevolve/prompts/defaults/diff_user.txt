@@ -1,30 +1,47 @@
-# Current Program Information
-- Fitness: {fitness_score}
-- Feature coordinates: {feature_coords}
-- Focus areas: {improvement_areas}
+# Current Program Information 
 
-{artifacts}
+## Current Program 
 
-# Program Evolution History
+{current_program} 
+
+{current_explanation_section} 
+
+## Parent Program 
+
+{parent_program_section} 
+
+## Current Metrics 
+
+{current_metrics} 
+
+## Parent vs Current (Metrics Diff) 
+
+{parent_vs_current_section} 
+
+## Current Artifacts 
+
+{current_artifacts_section} 
+
+# Program Evolution History 
+
 {evolution_history}
 
-# Current Program
-```{language}
-{current_program}
-```
-
 # Task
-Suggest improvements to the program that will improve its FITNESS SCORE.
-The system maintains diversity across these dimensions: {feature_dimensions}
-Different solutions with similar fitness but different features are valuable.
+Suggest improvements to the program to increase its FITNESS SCORE.  
+Diversity is maintained across: {feature_dimensions}, so different solutions with similar fitness but different features are also valuable.
 
-You MUST use the exact SEARCH/REPLACE diff format shown below to indicate changes:
+# Diff Submission Rules
+- You MUST output diffs using this exact format:
 
 <<<<<<< SEARCH
-# Original code to find and replace (must match exactly)
+# original code (must match exactly)
 =======
-# New replacement code
+# improved replacement
 >>>>>>> REPLACE
+
+- Multiple disjoint diffs may be included in one response.  
+- Do not rewrite the entire program—focus only on targeted improvements.  
+- Perform all edits in this single response (no follow-ups).  
 
 Example of valid diff format:
 <<<<<<< SEARCH
@@ -40,7 +57,6 @@ for i in range(m):
             C[i, j] += A[i, k] * B[k, j]
 >>>>>>> REPLACE
 
-You can suggest multiple changes. Each SEARCH section must exactly match code in the current program.
-Be thoughtful about your changes and explain your reasoning thoroughly.
 
-IMPORTANT: Do not rewrite the entire program - focus on targeted improvements.
+# Explanation
+After all diffs, include an **Explanation** section (text only, no code) describing what you changed and why, concisely but thoroughly.

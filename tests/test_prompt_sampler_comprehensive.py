@@ -157,7 +157,6 @@ class TestPromptSamplerComprehensive(unittest.TestCase):
         current_program = "def main(): pass"
 
         # Comprehensive test data
-        previous_programs = [{"id": "prev1", "code": "def v1(): pass", "metrics": {"score": 0.3}}]
         top_programs = [
             {"id": "top1", "code": "def best(): pass", "metrics": {"combined_score": 0.95}}
         ]
@@ -167,7 +166,6 @@ class TestPromptSamplerComprehensive(unittest.TestCase):
             current_program=current_program,
             parent_program="def parent(): pass",
             program_metrics={"combined_score": 0.7, "feature1": 10},
-            previous_programs=previous_programs,
             top_programs=top_programs,
             inspirations=inspirations,
             language="python",

@@ -1,17 +1,24 @@
 # Current Program Information
-- Fitness: {fitness_score}
-- Feature coordinates: {feature_coords}
-- Focus areas: {improvement_areas}
 
-{artifacts}
+## Current Program
+{current_program}
+
+{current_explanation_section}
+
+## Parent Program
+{parent_program_section}
+
+## Current Metrics
+{current_metrics}
+
+## Parent vs Current (Metrics Diff)
+{parent_vs_current_section}
+
+## Current Artifacts
+{current_artifacts_section}
 
 # Program Evolution History
 {evolution_history}
-
-# Current Program
-```{language}
-{current_program}
-```
 
 # Task
 Rewrite the program to improve its FITNESS SCORE.
