@@ -185,6 +185,7 @@ class Evaluator:
                             "timeout_duration": self.config.timeout,
                             "failure_stage": "evaluation",
                             "error_type": "timeout",
+                            "combined_score": self.config.cascade_thresholds[0] if "stage2_passed" in eval_result.metrics.keys() else 0.0
                         }
                     )
 

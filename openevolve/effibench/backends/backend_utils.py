@@ -628,6 +628,7 @@ class BackendManager:
         self._lock = threading.RLock()
         self._random = random.Random()  # Thread-safe random instance
         self._initialize_backends()
+        print(f"Initialized backends: {self._available_backends}")
         
     def _initialize_backends(self):
         """Initialize the backend list from environment variables or provided URLs."""
@@ -671,14 +672,19 @@ class BackendManager:
         """Mark a backend as unavailable after a failed request."""
         with self._lock:
             # Remove from available backends if it's there
-            if url in self._available_backends:
+            was_available = url in self._available_backends
+            if was_available:
+                queue_size = self._available_backends[url]
                 del self._available_backends[url]
+                logging.warning(f"Backend {url} removed from available backends (was queue_size: {queue_size})")
 
             # Add to unavailable backends
             if url not in self._unavailable_backends:  # Ensure not to add duplicates
-                logging.warning(f"Backend {url} marked as unavailable")
+                logging.warning(f"Backend {url} marked as unavailable. Available: {list(self._available_backends.keys())}, Unavailable: {len(self._unavailable_backends) + 1}")
                 self._unavailable_backends.add(url)
                 self._last_check_times[url] = time.time()
+            else:
+                logging.debug(f"Backend {url} already marked as unavailable")
     
     def get_available_backend(self):
         """
@@ -690,14 +696,21 @@ class BackendManager:
         with self._lock:
             current_time = time.time()
             
+            logging.debug(f"Getting available backend. Current state - Available: {len(self._available_backends)}, Unavailable: {len(self._unavailable_backends)}")
+            
             # Periodically refresh all available backends' queue sizes
             should_refresh = (current_time - self._last_refresh_time >= self._refresh_interval)
             if should_refresh:
+                logging.debug(f"Refreshing backend queue sizes (last refresh: {current_time - self._last_refresh_time:.1f}s ago)")
                 self._refresh_available_backends(current_time)
                 self._last_refresh_time = current_time
             
             # Recheck unavailable backends
+            unavailable_before = len(self._unavailable_backends)
             self._recheck_unavailable_backends(current_time)
+            unavailable_after = len(self._unavailable_backends)
+            if unavailable_before != unavailable_after:
+                logging.info(f"Backend recheck: {unavailable_before - unavailable_after} backends recovered")
 
             # If we have available backends, select the one with the smallest queue size
             if self._available_backends:
@@ -706,10 +719,17 @@ class BackendManager:
                                         if q_size == min_queue_size]
                 
                 if least_loaded_backends:
-                    return self._random.choice(least_loaded_backends)  # Return a random one from the least loaded
+                    selected = self._random.choice(least_loaded_backends)
+                    logging.debug(f"Selected backend {selected} (queue_size: {min_queue_size}) from {len(least_loaded_backends)} least loaded")
+                    return selected
             
             # If still no backends available after all checks
-            logging.error("No available backends found after re-checks.")
+            backend_status = {
+                "available": {url: queue_size for url, queue_size in self._available_backends.items()},
+                "unavailable": list(self._unavailable_backends),
+                "last_check_times": {url: current_time - check_time for url, check_time in self._last_check_times.items()}
+            }
+            logging.error(f"No available backends found after re-checks. Status: {backend_status}")
             return None
             
     def _refresh_available_backends(self, current_time):
@@ -781,7 +801,7 @@ def get_backend_url() -> str:
 
 
 def _make_api_request(method: str, endpoint: str, url: str, json_data=None, 
-                      params=None, request_timeout: int = 60,
+                      params=None, request_timeout: int = 120,
                       client_error_codes: tuple[int, ...] = (400,)) -> dict:
     """
     Helper function to make API requests with consistent error handling.
@@ -802,33 +822,57 @@ def _make_api_request(method: str, endpoint: str, url: str, json_data=None,
         HTTPException: For client errors (400, 404, etc.)
         BackendUnavailableError: For backend unavailability
     """
+    import time
+    start_time = time.time()
+    full_url = f"{url}/{endpoint}"
+    
     try:
-        full_url = f"{url}/{endpoint}"
+        logging.debug(f"Making {method.upper()} request to {full_url} with timeout={request_timeout}s")
         request_fn = getattr(requests, method.lower())
         response = request_fn(full_url, json=json_data, params=params, timeout=request_timeout)
+        
+        elapsed = time.time() - start_time
+        logging.debug(f"Request to {full_url} completed in {elapsed:.2f}s with status {response.status_code}")
         
         # Let client errors pass through directly
         if response.status_code in client_error_codes:
             response.raise_for_status()
         elif not response.ok:
             # For server errors, mark backend as unavailable
+            error_msg = f"Backend server error: {response.status_code} {response.reason} at {full_url}"
+            logging.error(f"{error_msg} (elapsed: {elapsed:.2f}s)")
             get_backend_manager().mark_backend_unavailable(url)
-            raise BackendUnavailableError(f"Backend error: {response.status_code} {response.reason}")
+            raise BackendUnavailableError(error_msg)
             
         return response.json()
     except requests.ConnectionError as e:
+        elapsed = time.time() - start_time
+        error_msg = f"Connection failed to {full_url}: {type(e).__name__}: {e}"
+        logging.error(f"{error_msg} (elapsed: {elapsed:.2f}s, timeout: {request_timeout}s)")
         get_backend_manager().mark_backend_unavailable(url)
-        raise BackendUnavailableError(f"Failed to connect to backend {url}: {e}") from e
+        raise BackendUnavailableError(error_msg) from e
     except requests.Timeout as e:
+        elapsed = time.time() - start_time
+        error_msg = f"Request timeout to {full_url}: {type(e).__name__}: {e}"
+        logging.error(f"{error_msg} (elapsed: {elapsed:.2f}s, timeout: {request_timeout}s)")
         get_backend_manager().mark_backend_unavailable(url)
-        raise BackendUnavailableError(f"Backend timeout at {url}: {e}") from e
+        raise BackendUnavailableError(error_msg) from e
     except requests.RequestException as e:
+        elapsed = time.time() - start_time
         # Let client errors pass through from raise_for_status()
         if hasattr(e, 'response') and e.response is not None and e.response.status_code in client_error_codes:
             raise
         # Other exceptions indicate backend issues
+        error_msg = f"Request failed to {full_url}: {type(e).__name__}: {e}"
+        logging.error(f"{error_msg} (elapsed: {elapsed:.2f}s, timeout: {request_timeout}s)")
         get_backend_manager().mark_backend_unavailable(url)
-        raise BackendUnavailableError(f"API request failed: {e}") from e
+        raise BackendUnavailableError(error_msg) from e
+    except Exception as e:
+        elapsed = time.time() - start_time
+        error_msg = f"Unexpected error for {full_url}: {type(e).__name__}: {e}"
+        logging.error(f"{error_msg} (elapsed: {elapsed:.2f}s, timeout: {request_timeout}s)")
+        get_backend_manager().mark_backend_unavailable(url)
+        raise BackendUnavailableError(error_msg) from e
 
 
 def submit_code(
@@ -838,7 +882,7 @@ def submit_code(
     stdin: str | None = None, 
     time_limit: int | None = None,
     memory_limit: int | None = None,
-    request_timeout: int = 60,
+    request_timeout: int = 120,
     backend_base_url: str | None = None
 ) -> str:
     """Submit code to the sandbox and return the submission ID."""
@@ -857,7 +901,7 @@ def submit_code(
 
 def submit_batch(
     requests_data: list[dict],
-    request_timeout: int = 120,  # Increased timeout for batch
+    request_timeout: int = 1200,  # Further increased timeout for batch operations
     backend_base_url: str | None = None
 ) -> list[int]:
     """Submit a batch of code execution requests to the sandbox."""
@@ -869,7 +913,7 @@ def submit_batch(
 
 def get_submission_result(
     submission_id: str, 
-    request_timeout: int = 60,
+    request_timeout: int = 120,
     backend_base_url: str | None = None
 ) -> dict:
     """Retrieve the sandbox result for a given submission ID."""
@@ -881,7 +925,7 @@ def get_submission_result(
 
 def get_batch_results(
     submission_ids: list[int], 
-    request_timeout: int = 120,  # Increased timeout for batch
+    request_timeout: int = 240,  # Further increased timeout for batch operations
     backend_base_url: str | None = None
 ) -> list[dict]:
     """Retrieve the sandbox results for a batch of submission IDs."""
@@ -893,7 +937,7 @@ def get_batch_results(
 
 def cancel_submission(
     submission_id: str, 
-    request_timeout: int = 60,
+    request_timeout: int = 120,
     backend_base_url: str | None = None
 ) -> dict:
     """Cancel a submission that is currently waiting to be processed."""

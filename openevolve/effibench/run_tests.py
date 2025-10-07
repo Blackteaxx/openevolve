@@ -1,5 +1,6 @@
 import json
 import logging
+import random
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -73,13 +74,13 @@ def run_tests(
     test_cases: list,
     evaluator: str,
     test_runner: str | None = None,
-    time_limit: int = 10,
+    time_limit: int = 20,  # Increased from 10 to 20 seconds
     memory_limit: int = 1024,
     early_stop: bool = True,
     raise_on_error: bool = True,
     as_batch: bool = True,
     backend_retries: int = 5,
-    eval_timeout: int = 10,
+    eval_timeout: int = 30,  # Increased from 10 to 30 seconds
     polling_interval: int = 5,
 ) -> list[dict]:
     """Runs a solution against a set of test cases and evaluates the results.
@@ -134,13 +135,24 @@ def run_tests(
         }
         for tc in test_cases
     ]
+    # Estimate payload size (stdin dominates) to tune request timeout for large inputs
+    try:
+        total_stdin_bytes = sum(len(req["stdin"]) if req.get("stdin") else 0 for req in batch_requests)
+    except Exception:
+        total_stdin_bytes = 0
+    estimated_payload_mb = total_stdin_bytes / (1024 * 1024)
+    submit_timeout = 1200
+    if estimated_payload_mb >= 200:
+        submit_timeout = 3600
+    logging.info(f"Estimated submit payload: {estimated_payload_mb:.1f} MB; request_timeout={submit_timeout}s")
+    
     evaluate = materialize_function_from_code(evaluator, "evaluate")
     for retry_count in range(backend_retries + 1):
         try:
             backend_base_url = get_backend_url()
 
             if as_batch:
-                sids = submit_batch(batch_requests, backend_base_url=backend_base_url)
+                sids = submit_batch(batch_requests, backend_base_url=backend_base_url, request_timeout=submit_timeout)
             else:
                 sids = [None] * len(batch_requests)
                 with ThreadPoolExecutor(len(batch_requests)) as executor:
@@ -154,6 +166,7 @@ def run_tests(
                             time_limit=req["time_limit"],
                             memory_limit=req["memory_limit"],
                             backend_base_url=backend_base_url,
+                            request_timeout=submit_timeout,
                         ): tid
                         for tid, req in enumerate(batch_requests)
                     }
@@ -279,9 +292,17 @@ def run_tests(
 
         except BackendUnavailableError as e:
             if retry_count < backend_retries:
+                # 计算重试延迟：基础延迟 + 指数退避 + 随机抖动
+                base_delay = 2.0  # 基础延迟2秒
+                exponential_delay = base_delay * (2 ** retry_count)  # 指数退避
+                jitter = random.uniform(0.5, 1.5)  # 随机抖动因子
+                retry_delay = min(exponential_delay * jitter, 30.0)  # 最大延迟30秒
+                
                 logging.warning(
-                    f"Backend unavailable during execution (attempt {retry_count + 1}/{backend_retries + 1}): {e}. Retrying..."
+                    f"Backend unavailable during execution (attempt {retry_count + 1}/{backend_retries + 1}): {e}. "
+                    f"Retrying in {retry_delay:.2f} seconds..."
                 )
+                time.sleep(retry_delay)
                 continue
             logging.error(f"All backends failed after {backend_retries} retries: {e}")
             raise

@@ -46,6 +46,19 @@ def analyze_runtimes(
     samples_np = np.array(samples)
     original_n = len(samples_np)
 
+    if original_n == 1:
+        return {
+            "original_n": original_n,
+            "n": 1,
+            "mean": samples_np[0],
+            "std": 0.0,
+            "min": samples_np[0],
+            "max": samples_np[0],
+            "max_diff": 0.0,
+            "95%_CI": (samples_np[0], samples_np[0]),
+            "trimmed_mean": samples_np[0],
+        }
+
     # IQR outlier removal
     Q1 = np.percentile(samples_np, 25)
     Q3 = np.percentile(samples_np, 75)

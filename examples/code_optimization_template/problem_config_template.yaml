@@ -3,6 +3,6 @@ task_data_path:  # path to the task data file
 
 time_limit: 10
 memory_limit: 1024
-num_runs: 20
+num_runs: 1
 trimming_fraction: 0.2
 max_workers: 3

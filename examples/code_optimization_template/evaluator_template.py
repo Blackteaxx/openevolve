@@ -113,9 +113,9 @@ def evaluate(
         failure_details_summary = []
         for status, failure in representative_failures.items():
             text = failure.get("text", "No additional error text.")
-            if len(text) > 150:
-                text = text[:150] + "..."
-            failure_details_summary.append(f"- Status: {status}, Details: {text}")
+            if len(text) > 50:
+                text = text[:50] + "..."
+            failure_details_summary.append(f"- Status: {status}, Details (first 50 chars of Output): {text}")
 
         # Join the summaries for a comprehensive error message
         failures_text = "\n".join(failure_details_summary)
@@ -127,7 +127,7 @@ def evaluate(
             "error_type": f"SolutionFailedTests (statuses: {all_statuses})",
             "error_message": f"Solution passed {pass_rate:.2%} of test cases. Failure details:\n{failures_text}",
             "suggestion": "Review the solution to ensure it correctly handles all test cases, including edge cases.",
-            "failed_tests": failed_test_details,  # Include all failure details
+            # "failed_tests": failed_test_details,  # Include all failure details
         }
 
         logger.info("evaluate: Returning error result.")

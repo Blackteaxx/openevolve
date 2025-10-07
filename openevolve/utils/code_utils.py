@@ -211,8 +211,10 @@ def extract_explanation(text: str) -> Optional[str]:
     """
     Extract an explanation section from LLM response.
 
-    Looks for a section starting with a line titled 'Explanation:' and
+    Looks for a section starting with a line titled 'Explanation' and
     captures everything after it to the end, stripping any fenced code blocks.
+    Supports both same-line content and content on the next line, with or without # prefix,
+    and with or without colon after 'Explanation'.
 
     Args:
         text: Full LLM response text
@@ -220,16 +222,38 @@ def extract_explanation(text: str) -> Optional[str]:
     Returns:
         Cleaned explanation string or None if not found
     """
-    # Find the Explanation header (case-insensitive, at line start)
-    match = re.search(r"(?im)^Explanation\s*:\s*(?:\r?\n)(.*)$", text, re.DOTALL)
-    if not match:
-        return None
-
-    explanation = match.group(1).strip()
-
-    # Strip fenced code blocks if any slipped in
-    explanation = re.sub(r"```.*?```", "", explanation, flags=re.DOTALL)
-
-    # Collapse excessive whitespace
-    explanation = re.sub(r"\n{3,}", "\n\n", explanation)
-    return explanation.strip() or None
+    # Try multiple patterns to handle different formats
+    patterns = [
+        # Pattern 1: Explanation: followed by content (same line or next line)
+        r"(?im)^Explanation\s*:\s*(.*)$",
+        # Pattern 2: # Explanation: (with hash prefix and colon)
+        r"(?im)^#\s*Explanation\s*:\s*(.*)$",
+        # Pattern 3: Explanation without colon, content on next line
+        r"(?im)^Explanation\s*\n(.*)$",
+        # Pattern 4: # Explanation without colon, content on next line
+        r"(?im)^#\s*Explanation\s*\n(.*)$",
+        # Pattern 5: Explanation without colon, content on same line
+        r"(?im)^Explanation\s+(.*)$",
+        # Pattern 6: # Explanation without colon, content on same line
+        r"(?im)^#\s*Explanation\s+(.*)$",
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, text, re.DOTALL)
+        if match:
+            explanation = match.group(1).strip()
+            
+            # If explanation starts with newline, remove it
+            if explanation.startswith('\n'):
+                explanation = explanation[1:]
+            
+            # Strip fenced code blocks if any slipped in
+            explanation = re.sub(r"```.*?```", "", explanation, flags=re.DOTALL)
+            
+            # Collapse excessive whitespace
+            explanation = re.sub(r"\n{3,}", "\n\n", explanation)
+            
+            result = explanation.strip()
+            return result if result else None
+    
+    return None
