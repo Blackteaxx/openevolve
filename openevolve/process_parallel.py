@@ -283,8 +283,7 @@ def _run_iteration_worker(
 
             child_code = apply_diff(parent.code, llm_response)
             changes_summary = format_diff_summary(diff_blocks)
-            # Temporarily disable explanation extraction
-            # explanation_text = extract_explanation(llm_response)
+            explanation_text = extract_explanation(llm_response)
         else:
             from openevolve.utils.code_utils import parse_full_rewrite, extract_explanation
 
