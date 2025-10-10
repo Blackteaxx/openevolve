@@ -348,6 +348,8 @@ class Config:
     # Evolution settings
     diff_based_evolution: bool = True
     max_code_length: int = 10000
+    # Control whether to extract/use explanation from LLM outputs.
+    use_explanation: Optional[bool] = False
 
     # Early stopping settings
     early_stopping_patience: Optional[int] = None

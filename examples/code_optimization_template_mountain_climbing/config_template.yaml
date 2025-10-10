@@ -1,0 +1,166 @@
+# Configuration for code minimization example
+max_iterations: 80
+checkpoint_interval: 5
+language: python
+
+llm:
+  primary_model: "Qwen3-32B"
+  primary_model_weight: 1
+
+  api_base: http://127.0.0.1:8080/v1
+  api_key: code-efficiency                     
+  temperature: 0.7
+  max_tokens: 8000
+  timeout: 120
+
+
+# Prompt configuration
+prompt:
+  # 2025.9.17: Shed light on some requirements
+  # 2025.9.27: Add the requirements of IO Task and import blocks
+  
+  system_message: |
+    ## Instructions
+    You are an expert competitive programmer specializing in advanced algorithm design and implementation, with strong focus on correctness and time efficiency.
+
+    Your task is to solve the following problem in python3:
+
+    ## Problem Description
+    {task_description}
+
+    ## Allowed Imports Scope
+    You may only import libraries within the scope defined below. 
+    Prefer importing specific functions/classes instead of entire modules when possible.
+    ```python
+    import re
+    from re import match, search, sub, split, findall, finditer
+    import sys
+    from sys import maxsize, stdin
+    import json
+    from json import loads
+    import math
+    from math import floor, ceil, factorial, sqrt, isqrt, inf, log2, log10, sin, cos, tan, pi, e, comb, perm, gcd, lcm
+    import copy
+    import pickle
+    import heapq
+    from heapq import heappush, heappop, heapify, heappushpop, nlargest, nsmallest
+    import bisect
+    from bisect import bisect_left, bisect_right
+    import string
+    from string import ascii_letters, ascii_lowercase, ascii_uppercase, digits, whitespace, punctuation, hexdigits
+    import random
+    import operator
+    import itertools
+    from itertools import combinations, permutations, product, groupby, chain, accumulate, zip_longest
+    import functools
+    from functools import lru_cache, cache, reduce
+    import collections
+    from collections import OrderedDict, defaultdict, Counter, deque
+    from typing import Set, Dict, List, Optional, Tuple
+    import sortedcontainers # pip install sortedcontainers
+    from sortedcontainers import SortedList, SortedDict, SortedSet
+    ````
+
+    ## Output Format
+
+    * The program must read input directly from standard input (stdin) and write output directly to standard output (stdout).
+    * Ensure proper parsing and formatting as required by the problem statement.
+    * The solution must be directly runnable as a complete program.
+
+    ## IMPORTANT (Evolution Setting & Diff-Only Submission)
+
+    * Do **not** rewrite the entire program from scratch.
+    * Focus only on **targeted improvements**.
+    * **Submission MUST be provided as a single markdown code block with language identifier `python`, and that code block MUST contain ONLY one or more EVOLVE diff blocks** (no full program dump).
+    * Each modification MUST be wrapped exactly as:
+
+      ```python
+      EVOLVE-BLOCK-START
+      <<<<<<< SEARCH
+      [original code snippet]
+      =======
+      [modified code snippet]
+      >>>>>>> REPLACE
+      EVOLVE-BLOCK-END
+      ```
+    * **SEARCH section must match the original code snippet byte-for-byte** (including whitespace and indentation). If it doesn’t match, the patch will fail.
+    * You may include **multiple** EVOLVE blocks in the **same single code block** when changing multiple, disjoint regions.
+    * Inside each block, only modify what’s necessary; do not reformat unrelated lines.
+    * Do **not** include any hard-coded or self-generated test cases inside the code block.
+    * Do **not** add extra print statements or debug logs.
+    * Assume the system will provide input through stdin and expects correct output via stdout.
+    * Ensure the solution runs efficiently and passes the official test cases.
+
+    ## Additional Explanation Rule
+
+    * Except the solution code, you may provide **helpful but brief comments** outside the code block.
+
+      * Inside the code block: keep comments minimal, only clarifying tricky logic (if needed) within the modified snippet.
+      * Outside the code block: give a short explanation of the algorithm and the reason for improvements.
+      * Keep explanations concise (a few sentences or bullet points), **not verbose**.
+      * The main focus must remain on delivering a correct and efficient solution.
+
+    ## Patch Hygiene (Strongly Recommended)
+
+    * Preserve original behavior outside targeted fixes; avoid changing variable names, imports, or formatting unless required.
+    * Maintain import scope rules above; if adding imports, include them via a separate EVOLVE block targeting the import region.
+    * Ensure the proper import is present (add via diff if missing).
+
+
+  # system_message: |
+  #   "You are an expert competitive programmer specializing in advanced algorithm design and implementation, with strong focus on correctness, time efficiency, and memory efficiency.
+
+  #   Please carefully read the task description (a standard input/output competitive programming problem) and write a **Python solution** that:
+  #   1. Reads from **stdin** (`sys.stdin` or `input()`).
+  #   2. Writes the correct output to **stdout** (`print()`).
+  #   3. Has no hard-coded test cases or extra print statements.
+  #   4. Runs efficiently within typical contest constraints.
+
+  #   You must follow these additional rules:
+  #   - The code must be enclosed in a single block: 
+  #     ```python
+  #     [Code]
+  #   ````
+
+  #   * Do **not** include provided test cases inside the code block.
+  #   * Do **not** generate your own test cases; assume the system will provide them via stdin.
+  #   * Ensure the solution passes the official test cases.
+
+  #   IMPORTANT:
+
+  #   * This is an **evolution setting**. Do not rewrite the entire program from scratch.
+  #   * Focus only on targeted improvements, and wrap them with `EVOLVE-BLOCK-START` / `EVOLVE-BLOCK-END`.
+  #   * All changes must be expressed in the `<<<<<<< SEARCH`, `=======`, `>>>>>>> REPLACE` diff format.
+
+  #   # Task description:
+
+  #   {task_description}"
+
+  # 2025.9.17: Add Template Dir
+  template_dir: "/data/CodeEfficiency/openevolve/openevolve/prompts/defaults"
+
+  # 2025.9.26: Add num_top_programs and num_diverse_programs
+  num_top_programs: 0
+  num_diverse_programs: 0
+  include_artifacts: true
+
+# Database configuration
+database:
+  population_size: 1
+  archive_size: 1
+  num_islands: 1
+  elite_selection_ratio: 0.2
+  exploitation_ratio: 0.7
+  log_prompts: true # Enable logging of prompts for debugging
+
+# Evaluator configuration
+evaluator:
+  timeout: 2000
+  enable_artifacts: true      # Error feedback to LLM
+  cascade_evaluation: true
+  cascade_thresholds: [0.6]   # Set as the weight of pass rate to decide if the solution passes the cascade evaluation
+  parallel_evaluations: 1
+
+# Evolution settings
+diff_based_evolution: true
+max_code_length: 20000

@@ -144,7 +144,7 @@ def run_tests(
     submit_timeout = 1200
     if estimated_payload_mb >= 200:
         submit_timeout = 3600
-    logging.info(f"Estimated submit payload: {estimated_payload_mb:.1f} MB; request_timeout={submit_timeout}s")
+    logging.debug(f"Estimated submit payload: {estimated_payload_mb:.1f} MB; request_timeout={submit_timeout}s")
     
     evaluate = materialize_function_from_code(evaluator, "evaluate")
     for retry_count in range(backend_retries + 1):

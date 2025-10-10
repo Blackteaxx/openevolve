@@ -16,8 +16,8 @@ def run_performance_benchmark(
     evaluator: str,
     test_runner: str | None = None,
     num_runs: int = 5,
-    time_limit: int = 5,
-    memory_limit: int = 256,
+    time_limit: int = 10,
+    memory_limit: int = 1024,
     trim_ratio: float = 0.1,
     max_workers: int = 4,
 ) -> Dict[str, float]:

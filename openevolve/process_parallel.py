@@ -227,7 +227,9 @@ def _run_iteration_worker(
             )
 
         # Parse response based on evolution mode
+        # Add a configurable switch to control whether explanation is extracted/used.
         explanation_text = None
+        use_explanation = getattr(_worker_config, "use_explanation", None)
         if _worker_config.diff_based_evolution:
             from openevolve.utils.code_utils import (
                 apply_diff,
@@ -283,8 +285,9 @@ def _run_iteration_worker(
 
             child_code = apply_diff(parent.code, llm_response)
             changes_summary = format_diff_summary(diff_blocks)
-            # Temporarily disable explanation extraction
-            # explanation_text = extract_explanation(llm_response)
+            # Controlled explanation extraction (disabled by default in diff-based mode)
+            if use_explanation:
+                explanation_text = extract_explanation(llm_response)
         else:
             from openevolve.utils.code_utils import parse_full_rewrite, extract_explanation
 
@@ -296,7 +299,9 @@ def _run_iteration_worker(
 
             child_code = new_code
             changes_summary = "Full rewrite"
-            explanation_text = extract_explanation(llm_response)
+            # Controlled explanation extraction (enabled by default in full rewrite mode)
+            if use_explanation:
+                explanation_text = extract_explanation(llm_response)
 
         # Check code length
         if len(child_code) > _worker_config.max_code_length:
@@ -323,7 +328,7 @@ def _run_iteration_worker(
             "parent_metrics": parent.metrics,
             "island": parent_island,
         }
-        if explanation_text:
+        if use_explanation and explanation_text:
             metadata["explanation"] = explanation_text
 
         child_program = Program(
@@ -419,6 +424,8 @@ class ProcessParallelController:
             "diff_based_evolution": config.diff_based_evolution,
             "max_code_length": config.max_code_length,
             "language": config.language,
+            # Custom flags
+            "use_explanation": config.use_explanation,
         }
 
     def start(self) -> None:
