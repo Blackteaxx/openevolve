@@ -87,6 +87,8 @@ def run_performance_benchmark(
             "performance_analysis": analysis_results,
             "first_run_details": [],
             "failed_submission_exit_codes": [],
+            "pass_rates": [],
+            "pass_rate_consistent": False,
         }
 
     first_run_results = all_results[0]
@@ -99,13 +101,37 @@ def run_performance_benchmark(
                 "status": tc.get("status"),
                 "text": tc.get("text"),
                 "exit_code": tc.get("exit_code"),
+                # Provide more context for debugging mismatches
+                "input": tc.get("input"),
+                "expected": tc.get("output"),
             }
             failed_test_details.append(failure_details)
+
+    # Compute pass rate consistency across all runs
+    pass_rates = []
+    for test_case_results in all_results:
+        total_cases_run = len(test_case_results)
+        num_passed_run = sum(1 for tc in test_case_results if tc.get("passed", False))
+        pr = num_passed_run / total_cases_run if total_cases_run > 0 else 0.0
+        pass_rates.append(pr)
+
+    pass_rate_consistent = len(set(pass_rates)) == 1
 
     # Calculate pass rate from the first run
     num_passed = sum(1 for tc in first_run_results if tc.get("passed", False))
     total_cases = len(first_run_results)
     pass_rate = num_passed / total_cases if total_cases > 0 else 0.0
+
+    # Print brief pass-rate consistency summary
+    try:
+        pr_str = ", ".join(f"{pr:.2f}" for pr in pass_rates)
+    except Exception:
+        pr_str = ", ".join(str(pr) for pr in pass_rates)
+    consistency_label = "consistent" if pass_rate_consistent else "inconsistent"
+    if not pass_rate_consistent:
+        print(
+            f"Pass rate consistency across {len(all_results)} runs: {consistency_label} | pass_rates: [{pr_str}] | first_run: {pass_rate:.2f}"
+        )
 
     # Collect runtimes only if all tests passed
     successful_runtimes = []
@@ -141,4 +167,6 @@ def run_performance_benchmark(
         "performance_analysis": analysis_results,
         "first_run_details": first_run_results,
         "failed_test_details": failed_test_details,
+        "pass_rates": pass_rates,
+        "pass_rate_consistent": pass_rate_consistent,
     }

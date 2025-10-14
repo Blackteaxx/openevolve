@@ -146,8 +146,8 @@ prompt:
 
 # Database configuration
 database:
-  population_size: 100
-  archive_size: 20
+  population_size: 200
+  archive_size: 200
   num_islands: 5
   elite_selection_ratio: 0.2
   exploitation_ratio: 0.7

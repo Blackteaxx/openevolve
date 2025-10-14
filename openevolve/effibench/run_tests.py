@@ -137,22 +137,30 @@ def run_tests(
     ]
     # Estimate payload size (stdin dominates) to tune request timeout for large inputs
     try:
-        total_stdin_bytes = sum(len(req["stdin"]) if req.get("stdin") else 0 for req in batch_requests)
+        total_stdin_bytes = sum(
+            len(req["stdin"]) if req.get("stdin") else 0 for req in batch_requests
+        )
     except Exception:
         total_stdin_bytes = 0
     estimated_payload_mb = total_stdin_bytes / (1024 * 1024)
     submit_timeout = 1200
     if estimated_payload_mb >= 200:
         submit_timeout = 3600
-    logging.debug(f"Estimated submit payload: {estimated_payload_mb:.1f} MB; request_timeout={submit_timeout}s")
-    
+    logging.debug(
+        f"Estimated submit payload: {estimated_payload_mb:.1f} MB; request_timeout={submit_timeout}s"
+    )
+
     evaluate = materialize_function_from_code(evaluator, "evaluate")
     for retry_count in range(backend_retries + 1):
         try:
             backend_base_url = get_backend_url()
 
             if as_batch:
-                sids = submit_batch(batch_requests, backend_base_url=backend_base_url, request_timeout=submit_timeout)
+                sids = submit_batch(
+                    batch_requests,
+                    backend_base_url=backend_base_url,
+                    request_timeout=submit_timeout,
+                )
             else:
                 sids = [None] * len(batch_requests)
                 with ThreadPoolExecutor(len(batch_requests)) as executor:
@@ -177,9 +185,17 @@ def run_tests(
             sid_to_tid = {sid: tid for tid, sid in enumerate(sids)}
             all_results = [None] * len(test_cases)
             pending_ids = set(sids)
+            # Retry tracker for rare cases where stdout is empty despite successful execution
+            empty_text_retries: dict[str, int] = {}
+            # Fallback tracker: resubmit at most once per test to avoid permanent empty stdout
+            resubmit_counts: dict[int, int] = {}
 
             while len(pending_ids):
-                time.sleep(polling_interval)
+                # 动态缩短轮询间隔：当存在空 stdout 的快速重试时，优先用更短的等待
+                if empty_text_retries:
+                    time.sleep(min(0.1, polling_interval))
+                else:
+                    time.sleep(polling_interval)
 
                 batch_results = get_batch_results(
                     list(pending_ids), backend_base_url=backend_base_url
@@ -190,10 +206,59 @@ def run_tests(
                     assert sid in pending_ids, f"Submission ID {sid} not in pending IDs"
 
                     if result_data["status"] not in ("waiting", "processing"):
-                        all_results[sid_to_tid[sid]] = {
-                            **result_data,
-                            **test_cases[sid_to_tid[sid]],
-                        }
+                        tid = sid_to_tid[sid]
+                        # Guard against rare race where stdout is not yet captured
+                        try:
+                            output_text = postprocess_text(result_data.get("text", ""))
+                            expected_text = postprocess_text(
+                                test_cases[tid].get("output", "")
+                            )
+                        except Exception:
+                            output_text, expected_text = (
+                                result_data.get("text", ""),
+                                test_cases[tid].get("output", ""),
+                            )
+
+                        if (
+                            result_data.get("exit_code") == 0
+                            and output_text == ""
+                            and expected_text != ""
+                        ):
+                            # Retry polling this submission a few times to allow backend to finalize stdout
+                            retry_count_local = empty_text_retries.get(sid, 0)
+                            # 降低最大重试数以更快进入后续处理/回退逻辑
+                            max_empty_text_retries = 3
+                            if retry_count_local < max_empty_text_retries:
+                                empty_text_retries[sid] = retry_count_local + 1
+                                # Exponential backoff bounded to 4s to reduce race likelihood
+                                # 更快的指数退避：起始 50ms，最大 500ms
+                                backoff = min(0.05 * (2**retry_count_local), 0.5)
+                                time.sleep(backoff)
+                                continue
+                            # If stdout is still empty after retries, resubmit this single test once.
+                            tid_for_resubmit = sid_to_tid[sid]
+                            if resubmit_counts.get(tid_for_resubmit, 0) < 1:
+                                req = batch_requests[tid_for_resubmit]
+                                new_sid = submit_code(
+                                    code=req["code"],
+                                    language=req["language"],
+                                    libraries=req["libraries"],
+                                    stdin=req["stdin"],
+                                    time_limit=req["time_limit"],
+                                    memory_limit=req["memory_limit"],
+                                    backend_base_url=backend_base_url,
+                                )
+                                # Replace old sid with new sid in tracking structures
+                                pending_ids.discard(sid)
+                                sid_to_tid.pop(sid, None)
+                                sid_to_tid[new_sid] = tid_for_resubmit
+                                pending_ids.add(new_sid)
+                                resubmit_counts[tid_for_resubmit] = 1
+                                empty_text_retries[new_sid] = 0
+                                # Skip finalization for the old sid; wait for the new one
+                                continue
+
+                        all_results[tid] = {**result_data, **test_cases[tid]}
                         pending_ids.remove(sid)
                         new_result_ids.add(sid)
                 new_results = [all_results[sid_to_tid[sid]] for sid in new_result_ids]
@@ -294,10 +359,10 @@ def run_tests(
             if retry_count < backend_retries:
                 # 计算重试延迟：基础延迟 + 指数退避 + 随机抖动
                 base_delay = 2.0  # 基础延迟2秒
-                exponential_delay = base_delay * (2 ** retry_count)  # 指数退避
+                exponential_delay = base_delay * (2**retry_count)  # 指数退避
                 jitter = random.uniform(0.5, 1.5)  # 随机抖动因子
                 retry_delay = min(exponential_delay * jitter, 30.0)  # 最大延迟30秒
-                
+
                 logging.warning(
                     f"Backend unavailable during execution (attempt {retry_count + 1}/{backend_retries + 1}): {e}. "
                     f"Retrying in {retry_delay:.2f} seconds..."

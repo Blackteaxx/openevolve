@@ -394,33 +394,42 @@ class ProgramDatabase:
         if len(island_programs) == 1:
             parent_id = island_programs[0]
         else:
-            # Use weighted sampling based on program scores
+            # Use weighted sampling based on program scores, or pick best deterministically
             island_program_objects = [
-                self.programs[pid] for pid in island_programs 
+                self.programs[pid] for pid in island_programs
                 if pid in self.programs
             ]
-            
+
             if not island_program_objects:
                 # Fallback if programs not found
                 parent_id = random.choice(island_programs)
             else:
-                # Calculate weights based on fitness scores
-                weights = []
-                for prog in island_program_objects:
-                    fitness = get_fitness_score(prog.metrics, self.config.feature_dimensions)
-                    # Add small epsilon to avoid zero weights
-                    weights.append(max(fitness, 0.001))
-                
-                # Normalize weights
-                total_weight = sum(weights)
-                if total_weight > 0:
-                    weights = [w / total_weight for w in weights]
+                # If configured, pick the best parent deterministically
+                if getattr(self.config, "island_pick_best_parent", False):
+                    # Sort by fitness (descending) and pick the top
+                    parent = max(
+                        island_program_objects,
+                        key=lambda p: get_fitness_score(p.metrics, self.config.feature_dimensions),
+                    )
+                    parent_id = parent.id
                 else:
-                    weights = [1.0 / len(island_program_objects)] * len(island_program_objects)
-                
-                # Sample parent based on weights
-                parent = random.choices(island_program_objects, weights=weights, k=1)[0]
-                parent_id = parent.id
+                    # Calculate weights based on fitness scores
+                    weights = []
+                    for prog in island_program_objects:
+                        fitness = get_fitness_score(prog.metrics, self.config.feature_dimensions)
+                        # Add small epsilon to avoid zero weights
+                        weights.append(max(fitness, 0.001))
+
+                    # Normalize weights
+                    total_weight = sum(weights)
+                    if total_weight > 0:
+                        weights = [w / total_weight for w in weights]
+                    else:
+                        weights = [1.0 / len(island_program_objects)] * len(island_program_objects)
+
+                    # Sample parent based on weights
+                    parent = random.choices(island_program_objects, weights=weights, k=1)[0]
+                    parent_id = parent.id
         
         parent = self.programs.get(parent_id)
         if not parent:

@@ -238,6 +238,7 @@ def _run_iteration_worker(
                 extract_explanation,
             )
 
+            # ! The diff blocks' are not validated according to the parent program
             diff_blocks = extract_diffs(llm_response)
 
             # 2025.9.17: Add Prompt Log - Custom logger for prompt flow
@@ -284,6 +285,10 @@ def _run_iteration_worker(
                 )
 
             child_code = apply_diff(parent.code, llm_response)
+            # if child_code == parent.code:
+            #     return SerializableResult(
+            #         error="Generated code is identical to parent code", iteration=iteration
+            #     )
             changes_summary = format_diff_summary(diff_blocks)
             # Controlled explanation extraction (disabled by default in diff-based mode)
             if use_explanation:

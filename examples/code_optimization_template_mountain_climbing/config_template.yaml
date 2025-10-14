@@ -146,12 +146,15 @@ prompt:
 
 # Database configuration
 database:
-  population_size: 1
-  archive_size: 1
+  population_size: 100
+  archive_size: 20
   num_islands: 1
   elite_selection_ratio: 0.2
   exploitation_ratio: 0.7
   log_prompts: true # Enable logging of prompts for debugging
+
+  # If true, sampling from island picks the best-fitness parent deterministically
+  island_pick_best_parent: true
 
 # Evaluator configuration
 evaluator:

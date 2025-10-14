@@ -251,6 +251,9 @@ class DatabaseConfig:
     exploration_ratio: float = 0.2
     exploitation_ratio: float = 0.7
     diversity_metric: str = "edit_distance"  # Options: "edit_distance", "feature_based"
+    
+    # If true, sampling from island picks the best-fitness parent deterministically
+    island_pick_best_parent: bool = False
 
     # Feature map dimensions for MAP-Elites
     # Default to complexity and diversity for better exploration
