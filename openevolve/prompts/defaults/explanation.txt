@@ -1,0 +1,61 @@
+# Code Improvement Analysis
+
+Analyze code change effectiveness and identify optimization opportunities.
+
+## Context
+Task: {task_description}
+Iteration: {iteration} | Language: {language}
+
+### Code
+Current: {current_code_section}
+Parent: {parent_code_section}
+
+### Metrics
+Current: {metrics}
+Parent: {parent_metrics}
+
+### Changes
+{changes_summary}
+{diff_blocks}
+
+### Artifacts
+{artifacts}
+
+## Analysis
+
+Provide your analysis in the following exact format:
+
+#### 1. Effectiveness: [Yes/No/Partially]
+**Metric Changes:**
+- [Metric Name]: [Old Value] → [New Value] ([+/-X%])
+- [Continue for all key metrics]
+
+**Summary:** [1-2 sentences on overall effectiveness]
+
+#### 2. Success Factors
+**Root Cause:** [Primary reason for improvement]
+**Key Changes:**
+- [Specific code change 1] → [Impact on performance]
+- [Specific code change 2] → [Impact on performance]
+
+#### 3. Failure Analysis
+**Root Cause:** [Why changes didn't work]
+**Issues:**
+- [Problem 1]: [Explanation]
+- [Problem 2]: [Explanation]
+
+#### 4. Next Opportunities
+**High Priority:**
+1. [Opportunity 1] - [Expected impact]
+2. [Opportunity 2] - [Expected impact]
+
+**Bottlenecks:** [Main performance limitations]
+
+#### 5. Recommendations
+**Do Next:**
+1. [Action 1] - [Priority: High/Medium/Low]
+2. [Action 2] - [Priority: High/Medium/Low]
+
+**Avoid:** [Changes likely to be counterproductive]
+
+Keep each section concise. Use concrete numbers and specific code references.

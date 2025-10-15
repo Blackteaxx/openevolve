@@ -30,8 +30,18 @@
 Suggest improvements to the program to increase its FITNESS SCORE.  
 Diversity is maintained across: {feature_dimensions}, so different solutions with similar fitness but different features are also valuable.
 
-# Diff Submission Rules
-- You MUST output diffs using this exact format:
+# Response Format
+Your response must follow this exact structure:
+
+## Thinking
+First, analyze the current program and identify improvement opportunities:
+- What are the main performance bottlenecks?
+- Which metrics need improvement most?
+- What specific changes could address these issues?
+- How will these changes impact the feature dimensions?
+
+## Diffs
+Then provide your improvements using this exact diff format:
 
 <<<<<<< SEARCH
 # original code (must match exactly)
@@ -39,9 +49,10 @@ Diversity is maintained across: {feature_dimensions}, so different solutions wit
 # improved replacement
 >>>>>>> REPLACE
 
-- Multiple disjoint diffs may be included in one response.  
-- Do not rewrite the entire program—focus only on targeted improvements.  
-- Perform all edits in this single response (no follow-ups).  
+**Diff Rules:**
+- Multiple disjoint diffs may be included
+- Do not rewrite the entire program—focus only on targeted improvements
+- Perform all edits in this single response (no follow-ups)
 
 Example of valid diff format:
 <<<<<<< SEARCH
@@ -56,7 +67,3 @@ for i in range(m):
         for j in range(p):
             C[i, j] += A[i, k] * B[k, j]
 >>>>>>> REPLACE
-
-
-# Explanation
-After all diffs, include an **Explanation** section (text only, no code) describing what you changed and why, concisely but thoroughly.

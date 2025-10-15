@@ -70,6 +70,36 @@ def apply_diff(original_code: str, diff_text: str) -> str:
     return "\n".join(result_lines)
 
 
+def apply_validated_diff_blocks(original_code: str, diff_blocks: List[Tuple[str, str]]) -> str:
+    """
+    Apply validated diff blocks directly to the original code
+
+    Args:
+        original_code: Original source code
+        diff_blocks: List of validated tuples (search_text, replace_text)
+
+    Returns:
+        Modified code
+    """
+    # Split into lines for easier processing
+    original_lines = original_code.split("\n")
+    result_lines = original_lines.copy()
+
+    # Apply each diff block
+    for search_text, replace_text in diff_blocks:
+        search_lines = search_text.split("\n")
+        replace_lines = replace_text.split("\n")
+
+        # Find where the search pattern starts in the original code
+        for i in range(len(result_lines) - len(search_lines) + 1):
+            if result_lines[i : i + len(search_lines)] == search_lines:
+                # Replace the matched section
+                result_lines[i : i + len(search_lines)] = replace_lines
+                break
+
+    return "\n".join(result_lines)
+
+
 def extract_diffs(diff_text: str) -> List[Tuple[str, str]]:
     """
     Extract diff blocks from the diff text
@@ -83,6 +113,65 @@ def extract_diffs(diff_text: str) -> List[Tuple[str, str]]:
     diff_pattern = r"<<<<<<< SEARCH\n(.*?)=======\n(.*?)>>>>>>> REPLACE"
     diff_blocks = re.findall(diff_pattern, diff_text, re.DOTALL)
     return [(match[0].rstrip(), match[1].rstrip()) for match in diff_blocks]
+
+
+def validate_diff_blocks(original_code: str, diff_blocks: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
+    """
+    Validate diff blocks against the original code and return only valid ones
+
+    Args:
+        original_code: Original source code
+        diff_blocks: List of tuples (search_text, replace_text)
+
+    Returns:
+        List of valid diff blocks that can be found in the original code
+    """
+    if not diff_blocks:
+        return []
+    
+    original_lines = original_code.split("\n")
+    valid_diff_blocks = []
+    
+    for search_text, replace_text in diff_blocks:
+        search_lines = search_text.split("\n")
+        
+        # Check if this search pattern can be found in the original code
+        found = False
+        for i in range(len(original_lines) - len(search_lines) + 1):
+            if original_lines[i : i + len(search_lines)] == search_lines:
+                found = True
+                break
+        
+        if found:
+            valid_diff_blocks.append((search_text, replace_text))
+    
+    return valid_diff_blocks
+
+def format_diff_blocks_string(diff_blocks: List[Tuple[str, str]]) -> Optional[str]:
+    """
+    Format diff blocks as a complete diff blocks string with full content
+    
+    Args:
+        diff_blocks: List of tuples (search_text, replace_text)
+        
+    Returns:
+        Formatted diff blocks string or None if no blocks provided
+    """
+    if not diff_blocks:
+        return None
+        
+    formatted_diffs = []
+    for i, (search_text, replace_text) in enumerate(diff_blocks):
+        formatted_diffs.append(f"Diff Block {i+1}:")
+        formatted_diffs.append("<<<<<<< SEARCH")
+        formatted_diffs.append(search_text)
+        formatted_diffs.append("=======")
+        formatted_diffs.append(replace_text)
+        formatted_diffs.append(">>>>>>> REPLACE")
+        if i < len(diff_blocks) - 1:  # Add separator between blocks
+            formatted_diffs.append("")
+    
+    return "\n".join(formatted_diffs)
 
 
 def parse_full_rewrite(llm_response: str, language: str = "python") -> Optional[str]:

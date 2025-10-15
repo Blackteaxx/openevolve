@@ -30,6 +30,9 @@ class SerializableResult:
     artifacts: Optional[Dict[str, Any]] = None
     iteration: int = 0
     error: Optional[str] = None
+    # Explanation prompt/response for logging
+    explanation_prompt: Optional[Dict[str, str]] = None
+    explanation_response: Optional[str] = None
 
 
 def _worker_init(
@@ -47,6 +50,7 @@ def _worker_init(
     global _worker_evaluator
     global _worker_llm_ensemble
     global _worker_prompt_sampler
+    global _worker_explanation_service
 
     # Store config for later use
     # Reconstruct Config object from nested dictionaries
@@ -57,6 +61,7 @@ def _worker_init(
         LLMConfig,
         LLMModelConfig,
         PromptConfig,
+        ExplanationConfig,
     )
 
     # Reconstruct model objects
@@ -75,16 +80,36 @@ def _worker_init(
     prompt_config = PromptConfig(**config_dict["prompt"])
     database_config = DatabaseConfig(**config_dict["database"])
     evaluator_config = EvaluatorConfig(**config_dict["evaluator"])
+    # Explanation config (optional) with dedicated LLM reconstruction
+    explanation_config = None
+    if "explanation" in config_dict and isinstance(config_dict["explanation"], dict):
+        exp_dict = dict(config_dict["explanation"])  # shallow copy
+        if "llm" in exp_dict and isinstance(exp_dict["llm"], dict):
+            exp_llm_dict = dict(exp_dict["llm"])  # shallow copy
+            # Reconstruct nested model configs for explanation LLM
+            if "models" in exp_llm_dict and isinstance(exp_llm_dict["models"], list):
+                exp_llm_dict["models"] = [
+                    LLMModelConfig(**m) for m in exp_llm_dict["models"]
+                ]
+            if "evaluator_models" in exp_llm_dict and isinstance(
+                exp_llm_dict["evaluator_models"], list
+            ):
+                exp_llm_dict["evaluator_models"] = [
+                    LLMModelConfig(**m) for m in exp_llm_dict["evaluator_models"]
+                ]
+            exp_dict["llm"] = LLMConfig(**exp_llm_dict)
+        explanation_config = ExplanationConfig(**exp_dict)
 
     _worker_config = Config(
         llm=llm_config,
         prompt=prompt_config,
         database=database_config,
         evaluator=evaluator_config,
+        explanation=explanation_config if explanation_config else None,
         **{
             k: v
             for k, v in config_dict.items()
-            if k not in ["llm", "prompt", "database", "evaluator"]
+            if k not in ["llm", "prompt", "database", "evaluator", "explanation"]
         },
     )
     _worker_evaluation_file = evaluation_file
@@ -93,6 +118,7 @@ def _worker_init(
     _worker_evaluator = None
     _worker_llm_ensemble = None
     _worker_prompt_sampler = None
+    _worker_explanation_service = None
 
 
 def _lazy_init_worker_components():
@@ -100,6 +126,7 @@ def _lazy_init_worker_components():
     global _worker_evaluator
     global _worker_llm_ensemble
     global _worker_prompt_sampler
+    global _worker_explanation_service
 
     if _worker_llm_ensemble is None:
         from openevolve.llm.ensemble import LLMEnsemble
@@ -129,6 +156,40 @@ def _lazy_init_worker_components():
             database=None,  # No shared database in worker
         )
 
+    # Initialize explanation service if enabled and not yet created
+    if _worker_explanation_service is None:
+        explanation_cfg = getattr(_worker_config, "explanation", None)
+        if explanation_cfg and getattr(explanation_cfg, "enabled", False):
+            from openevolve.explanation_service import ExplanationService
+            from openevolve.llm.ensemble import LLMEnsemble
+
+            # Choose ensemble role (evolution or evaluator),
+            # but prefer dedicated explanation LLM config if provided.
+            role = getattr(explanation_cfg, "ensemble_role", "evolution")
+            if getattr(explanation_cfg, "llm", None):
+                exp_llm_cfg = explanation_cfg.llm
+                if role == "evaluator" and getattr(
+                    exp_llm_cfg, "evaluator_models", None
+                ):
+                    explanation_llm = LLMEnsemble(exp_llm_cfg.evaluator_models)
+                else:
+                    explanation_llm = LLMEnsemble(exp_llm_cfg.models)
+            else:
+                if role == "evaluator":
+                    explanation_llm = LLMEnsemble(_worker_config.llm.evaluator_models)
+                else:
+                    explanation_llm = _worker_llm_ensemble or LLMEnsemble(
+                        _worker_config.llm.models
+                    )
+
+            # Reuse TemplateManager from prompt sampler
+            template_manager = _worker_prompt_sampler.template_manager
+            _worker_explanation_service = ExplanationService(
+                template_manager=template_manager,
+                llm_ensemble=explanation_llm,
+                config=explanation_cfg,
+            )
+
 
 def _run_iteration_worker(
     iteration: int,
@@ -152,7 +213,7 @@ def _run_iteration_worker(
 
         # Get parent artifacts if available
         parent_artifacts = db_snapshot["artifacts"].get(parent_id)
-        
+
         # Get parent program of current program
         grand_parent_id = parent.parent_id
         grand_parent = None
@@ -179,7 +240,7 @@ def _run_iteration_worker(
         programs_for_prompt = island_programs[
             : _worker_config.prompt.num_top_programs  # 2025.9.29: revise from num_top_programs + num_diverse_programs to num_top_programs
         ]
-        
+
         # Build prompt
         # 变更说明：
         # - 不再传入 previous_programs（用户建议去掉）
@@ -193,10 +254,8 @@ def _run_iteration_worker(
             parent_program=grand_parent.code if grand_parent else None,
             # 指标对比也改为祖父的指标
             parent_metrics=grand_parent.metrics if grand_parent else None,
-
             top_programs=[p.to_dict() for p in programs_for_prompt],
             inspirations=[p.to_dict() for p in inspirations],
-            
             language=_worker_config.language,
             evolution_round=iteration,
             diff_based_evolution=_worker_config.diff_based_evolution,
@@ -233,13 +292,17 @@ def _run_iteration_worker(
         if _worker_config.diff_based_evolution:
             from openevolve.utils.code_utils import (
                 apply_diff,
+                apply_validated_diff_blocks,
                 extract_diffs,
                 format_diff_summary,
                 extract_explanation,
+                validate_diff_blocks,
+                format_diff_blocks_string,
             )
 
-            # ! The diff blocks' are not validated according to the parent program
-            diff_blocks = extract_diffs(llm_response)
+            # Extract diff blocks and validate them against the parent program
+            raw_diff_blocks = extract_diffs(llm_response)
+            diff_blocks = validate_diff_blocks(parent.code, raw_diff_blocks)
 
             # 2025.9.17: Add Prompt Log - Custom logger for prompt flow
             prompt_flow_logger = logging.getLogger("prompt_flow")
@@ -273,10 +336,24 @@ def _run_iteration_worker(
             prompt_flow_logger.info(f"\nLLM system message: {prompt['system']}")
             prompt_flow_logger.info(f"\nLLM user message: {prompt['user']}")
             prompt_flow_logger.info(f"\nLLM generated response: {llm_response}")
-            if diff_blocks:
-                prompt_flow_logger.info(f"\nLLM generated diffs: {diff_blocks}")
+            if raw_diff_blocks:
+                prompt_flow_logger.info(
+                    f"\nLLM extracted {len(raw_diff_blocks)} raw diff blocks: {raw_diff_blocks}"
+                )
+                if diff_blocks:
+                    prompt_flow_logger.info(
+                        f"\nValidated {len(diff_blocks)} valid diff blocks: {diff_blocks}"
+                    )
+                    if len(diff_blocks) < len(raw_diff_blocks):
+                        prompt_flow_logger.info(
+                            f"\nFiltered out {len(raw_diff_blocks) - len(diff_blocks)} invalid diff blocks"
+                        )
+                else:
+                    prompt_flow_logger.info(
+                        "\nNo valid diff blocks found after validation"
+                    )
             else:
-                prompt_flow_logger.info("\nLLM generated no valid diffs")
+                prompt_flow_logger.info("\nLLM generated no diff blocks")
             prompt_flow_logger.info("=" * 80)
 
             if not diff_blocks:
@@ -284,17 +361,21 @@ def _run_iteration_worker(
                     error="No valid diffs found in response", iteration=iteration
                 )
 
-            child_code = apply_diff(parent.code, llm_response)
-            # if child_code == parent.code:
-            #     return SerializableResult(
-            #         error="Generated code is identical to parent code", iteration=iteration
-            #     )
+            child_code = apply_validated_diff_blocks(parent.code, diff_blocks)
+            if child_code == parent.code:
+                return SerializableResult(
+                    error="Generated code is identical to parent code",
+                    iteration=iteration,
+                )
             changes_summary = format_diff_summary(diff_blocks)
             # Controlled explanation extraction (disabled by default in diff-based mode)
             if use_explanation:
                 explanation_text = extract_explanation(llm_response)
         else:
-            from openevolve.utils.code_utils import parse_full_rewrite, extract_explanation
+            from openevolve.utils.code_utils import (
+                parse_full_rewrite,
+                extract_explanation,
+            )
 
             new_code = parse_full_rewrite(llm_response, _worker_config.language)
             if not new_code:
@@ -327,11 +408,45 @@ def _run_iteration_worker(
         # Get artifacts
         artifacts = _worker_evaluator.get_pending_artifacts(child_id)
 
+        # Optionally build and generate explanation via ExplanationService
+        explanation_prompt = None
+        explanation_response = None
+        if use_explanation and _worker_explanation_service is not None:
+            try:
+                # Get diff_blocks if available (for diff-based evolution)
+                diff_blocks_str = None
+                if _worker_config.diff_based_evolution and "diff_blocks" in locals():
+                    diff_blocks_str = format_diff_blocks_string(diff_blocks)
+
+                explanation_prompt = _worker_explanation_service.build_prompt(
+                    metrics=child_metrics,
+                    artifacts=artifacts,
+                    changes_summary=changes_summary,
+                    current_code=child_code,
+                    parent_code=parent.code,
+                    language=_worker_config.language,
+                    iteration=iteration,
+                    task_description=_worker_config.prompt.system_message,
+                    parent_metrics=parent.metrics,
+                    diff_blocks=diff_blocks_str,
+                )
+                explanation_response = asyncio.run(
+                    _worker_explanation_service.generate(explanation_prompt)
+                )
+                # Prefer service-generated explanation when available
+                if explanation_response:
+                    explanation_text = explanation_response
+            except Exception as ex:
+                logger.warning(f"ExplanationService generation failed: {ex}")
+
         # Create child program
         metadata = {
             "changes": changes_summary,
             "parent_metrics": parent.metrics,
             "island": parent_island,
+            "diff_blocks": format_diff_blocks_string(diff_blocks)
+            if _worker_config.diff_based_evolution
+            else None,
         }
         if use_explanation and explanation_text:
             metadata["explanation"] = explanation_text
@@ -357,6 +472,8 @@ def _run_iteration_worker(
             llm_response=llm_response,
             artifacts=artifacts,
             iteration=iteration,
+            explanation_prompt=explanation_prompt,
+            explanation_response=explanation_response,
         )
 
     except Exception as e:
@@ -421,6 +538,30 @@ class ProcessParallelController:
             "prompt": asdict(config.prompt),
             "database": asdict(config.database),
             "evaluator": asdict(config.evaluator),
+            "explanation": {
+                "enabled": config.explanation.enabled,
+                "template_key": config.explanation.template_key,
+                "system_message_key": config.explanation.system_message_key,
+                "include_code": config.explanation.include_code,
+                "max_artifacts_bytes": config.explanation.max_artifacts_bytes,
+                "ensemble_role": config.explanation.ensemble_role,
+                "llm": {
+                    "models": [asdict(m) for m in config.explanation.llm.models],
+                    "evaluator_models": [
+                        asdict(m) for m in config.explanation.llm.evaluator_models
+                    ],
+                    "api_base": config.explanation.llm.api_base,
+                    "api_key": config.explanation.llm.api_key,
+                    "temperature": config.explanation.llm.temperature,
+                    "top_p": config.explanation.llm.top_p,
+                    "max_tokens": config.explanation.llm.max_tokens,
+                    "timeout": config.explanation.llm.timeout,
+                    "retries": config.explanation.llm.retries,
+                    "retry_delay": config.explanation.llm.retry_delay,
+                }
+                if config.explanation.llm
+                else None,
+            },
             "max_iterations": config.max_iterations,
             "checkpoint_interval": config.checkpoint_interval,
             "log_level": config.log_level,
@@ -648,6 +789,25 @@ class ProcessParallelController:
                             if result.llm_response
                             else [],
                         )
+
+                    # Log explanation prompt/response if present
+                    if (
+                        getattr(self.config, "use_explanation", False)
+                        and result.explanation_prompt
+                    ):
+                        try:
+                            self.database.log_prompt(
+                                template_key=self.config.explanation.template_key,
+                                program_id=child_program.id,
+                                prompt=result.explanation_prompt,
+                                responses=[result.explanation_response]
+                                if result.explanation_response
+                                else [],
+                            )
+                        except Exception as ex:
+                            logger.warning(
+                                f"Failed to log explanation prompt/response: {ex}"
+                            )
 
                     # Island management
                     if (

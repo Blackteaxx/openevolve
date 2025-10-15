@@ -4,6 +4,7 @@ Configuration handling for OpenEvolve
 
 import os
 from dataclasses import dataclass, field
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Union
 
@@ -231,6 +232,21 @@ class PromptConfig:
 
 
 @dataclass
+class ExplanationConfig:
+    """Configuration for post-evaluation explanation generation"""
+
+    enabled: bool = False
+    template_key: str = "explanation"
+    system_message_key: str = "system_message"
+    include_code: bool = False
+    max_artifacts_bytes: int = 10 * 1024
+    ensemble_role: str = "evolution"  # "evolution" or "evaluator"
+    # Optional dedicated LLM configuration for explanation
+    # If provided, overrides selection from evolution/evaluator ensembles
+    llm: Optional[LLMConfig] = None
+
+
+@dataclass
 class DatabaseConfig:
     """Configuration for the program database"""
 
@@ -347,6 +363,7 @@ class Config:
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
     evaluator: EvaluatorConfig = field(default_factory=EvaluatorConfig)
     evolution_trace: EvolutionTraceConfig = field(default_factory=EvolutionTraceConfig)
+    explanation: ExplanationConfig = field(default_factory=ExplanationConfig)
 
     # Evolution settings
     diff_based_evolution: bool = True
@@ -374,7 +391,7 @@ class Config:
 
         # Update top-level fields
         for key, value in config_dict.items():
-            if key not in ["llm", "prompt", "database", "evaluator", "evolution_trace"] and hasattr(config, key):
+            if key not in ["llm", "prompt", "database", "evaluator", "evolution_trace", "explanation"] and hasattr(config, key):
                 setattr(config, key, value)
 
         # Update nested configs
@@ -399,6 +416,21 @@ class Config:
             config.evaluator = EvaluatorConfig(**config_dict["evaluator"])
         if "evolution_trace" in config_dict:
             config.evolution_trace = EvolutionTraceConfig(**config_dict["evolution_trace"])
+        if "explanation" in config_dict:
+            exp_dict = config_dict["explanation"] if isinstance(config_dict["explanation"], dict) else {}
+            # Rebuild nested LLM config for explanation if provided
+            if isinstance(exp_dict, dict) and "llm" in exp_dict and isinstance(exp_dict["llm"], dict):
+                exp_llm_dict = dict(exp_dict["llm"])  # shallow copy
+                if "models" in exp_llm_dict:
+                    exp_llm_dict["models"] = [LLMModelConfig(**m) for m in exp_llm_dict["models"]]
+                if "evaluator_models" in exp_llm_dict:
+                    exp_llm_dict["evaluator_models"] = [LLMModelConfig(**m) for m in exp_llm_dict["evaluator_models"]]
+                exp_dict["llm"] = LLMConfig(**exp_llm_dict)
+            config.explanation = ExplanationConfig(**exp_dict)
+
+        # Backward compatibility: reflect use_explanation flag into explanation.enabled
+        if getattr(config, "use_explanation", None) is not None:
+            config.explanation.enabled = bool(config.use_explanation)
 
         return config
 
@@ -475,6 +507,31 @@ class Config:
                 "output_path": self.evolution_trace.output_path,
                 "buffer_size": self.evolution_trace.buffer_size,
                 "compress": self.evolution_trace.compress,
+            },
+            "explanation": {
+                "enabled": self.explanation.enabled,
+                "template_key": self.explanation.template_key,
+                "system_message_key": self.explanation.system_message_key,
+                "include_code": self.explanation.include_code,
+                "max_artifacts_bytes": self.explanation.max_artifacts_bytes,
+                "ensemble_role": self.explanation.ensemble_role,
+                # Include dedicated LLM config for explanation, if present
+                "llm": (
+                    {
+                        "models": [asdict(m) for m in getattr(self.explanation.llm, "models", [])],
+                        "evaluator_models": [asdict(m) for m in getattr(self.explanation.llm, "evaluator_models", [])],
+                        "api_base": getattr(self.explanation.llm, "api_base", None),
+                        "api_key": getattr(self.explanation.llm, "api_key", None),
+                        "temperature": getattr(self.explanation.llm, "temperature", None),
+                        "top_p": getattr(self.explanation.llm, "top_p", None),
+                        "max_tokens": getattr(self.explanation.llm, "max_tokens", None),
+                        "timeout": getattr(self.explanation.llm, "timeout", None),
+                        "retries": getattr(self.explanation.llm, "retries", None),
+                        "retry_delay": getattr(self.explanation.llm, "retry_delay", None),
+                    }
+                    if getattr(self.explanation, "llm", None) is not None
+                    else None
+                ),
             },
             # Evolution settings
             "diff_based_evolution": self.diff_based_evolution,
