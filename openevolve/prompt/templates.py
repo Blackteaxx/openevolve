@@ -166,6 +166,38 @@ DEFAULT_TEMPLATES = {
     "inspirations_section": INSPIRATIONS_SECTION_TEMPLATE,
     "inspiration_program": INSPIRATION_PROGRAM_TEMPLATE,
     "evaluation": EVALUATION_TEMPLATE,
+    # Experience KB: optional injection section and update prompts
+    "experience_kb_section": "## {section_title}\n\n{kb_summary}\n",
+    "experience_kb_system_message": (
+        "You are an engineering mentor maintaining an evolving Experience Knowledge Base in Markdown. "
+        "For each update, read the provided context sections and return ONLY a complete, revised Markdown document. "
+        "Keep guidance high-level, succinct, and focused on practical, performance-impacting recommendations."
+    ),
+    "experience_kb_update": (
+        "**Context**\n"
+        "Task: {task_description}\n"
+        "Iteration: {iteration} | Language: {language}\n\n"
+        "**Code**\n"
+        "Current: {current_code_section}\n"
+        "Parent: {parent_code_section}\n\n"
+        "**Metrics**\n"
+        "Current: {metrics}\n"
+        "Parent: {parent_metrics}\n\n"
+        "**Changes**\n"
+        "{changes_summary}\n"
+        "{diff_blocks}\n\n"
+        "**Artifacts**\n"
+        "{artifacts}\n\n"
+        "**Explanation**\n"
+        "{explanation}\n\n"
+        "**Existing Experience KB (Markdown)**\n"
+        "{existing_kb_markdown}\n\n"
+        "Revise the Experience Knowledge Base using the context above and return ONLY the complete updated Markdown document.\n"
+        "- Keep content concise, actionable, and high-level.\n"
+        "- Integrate new learnings; prune outdated or redundant advice.\n"
+        "- Use clear headings and bullet points; avoid verbose narratives.\n"
+        "- Do NOT return JSON or any text outside the Markdown."
+    ),
 }
 
 

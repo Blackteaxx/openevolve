@@ -65,6 +65,10 @@ class PromptSampler:
         parent_metrics: Dict[str, float] = {},
         # 新增：当前程序的解释（来自 metadata.explanation 或外部）
         current_explanation: Optional[str] = None,
+        # Experience KB summary for injection (pre-formatted or raw text)
+        experience_kb_summary: Optional[str] = None,
+        # Experience KB: custom section template key override
+        experience_kb_section_key: Optional[str] = None,
         **kwargs: Any,
     ) -> Dict[str, str]:
         """
@@ -142,7 +146,7 @@ class PromptSampler:
         current_explanation_section = ""
         if current_explanation:
             current_explanation_section = (
-                f"\n**Why this program:** {current_explanation}\n"
+                f"\n**Analysis of this Program and its diff:** \n{current_explanation}\n"
             )
 
         # 2. Current Metrics（只展示metrics_str，不再放"improvement areas"）
@@ -181,6 +185,20 @@ class PromptSampler:
         fitness_score = get_fitness_score(program_metrics, feature_dimensions)
         feature_coords = format_feature_coordinates(program_metrics, feature_dimensions)
 
+        # Experience KB section (optional)
+        experience_kb_section = ""
+        if experience_kb_summary:
+            try:
+                # Allow custom template key override; fallback to default key
+                kb_section_template = self.template_manager.get_template(
+                    experience_kb_section_key or "experience_kb_section"
+                )
+            except Exception:
+                kb_section_template = "# Experience Knowledge Base\n\n{kb_summary}\n"
+            experience_kb_section = kb_section_template.format(
+                section_title="Experience Knowledge Base", kb_summary=experience_kb_summary
+            )
+
         # Format the final user message using new architecture
         user_message = user_template.format(
             # 新的信息架构变量
@@ -192,6 +210,8 @@ class PromptSampler:
             current_artifacts_section=current_artifacts_section,
             evolution_history=evolution_history,
             language=language,
+            # Experience KB injection placeholder (for custom templates)
+            experience_kb_section=experience_kb_section,
             # 保持向后兼容的变量
             metrics=current_metrics_str,
             fitness_score=f"{fitness_score:.4f}",
@@ -203,6 +223,10 @@ class PromptSampler:
             artifacts=current_artifacts_section,
             **kwargs,
         )
+
+        # 如果模板没有提供 experience_kb_section 占位符，但存在 KB 摘要，则在消息顶部兜底插入
+        if experience_kb_section and "{experience_kb_section}" not in user_template:
+            user_message = f"{experience_kb_section}\n\n" + user_message
 
         return {
             "system": system_message,
@@ -669,7 +693,7 @@ class PromptSampler:
         explanation_section = ""
         explanation = program_metadata.get("explanation", "")
         if explanation:
-            explanation_section = f"\n\n**Why this change:** {explanation}"
+            explanation_section = f"\n\n**Analysis of this Program and its diff:** \n{explanation}"
 
         # 组合所有部分
         sections = [

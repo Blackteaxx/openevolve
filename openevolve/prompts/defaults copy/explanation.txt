@@ -1,0 +1,69 @@
+# Code Improvement Analysis
+
+Analyze code change effectiveness following **CORRECTNESS FIRST, THEN PERFORMANCE** principle and identify optimization opportunities.
+
+## Context
+Task: {task_description}
+Iteration: {iteration} | Language: {language}
+
+### Code
+Current: {current_code_section}
+Parent: {parent_code_section}
+
+### Metrics
+Current: {metrics}
+Parent: {parent_metrics}
+
+### Changes
+{changes_summary}
+{diff_blocks}
+
+### Artifacts
+{artifacts}
+
+## Analysis
+
+Provide your analysis in the following exact format, prioritizing correctness assessment:
+
+#### 1. Correctness Assessment: [Correct/Incorrect/Partially Correct]
+**Correctness Changes:**
+- Output Accuracy: [Assessment of correctness impact]
+- Logic Integrity: [Assessment of algorithmic correctness]
+- Edge Case Handling: [Assessment of robustness]
+
+**Correctness Summary:** [1-2 sentences on correctness impact]
+
+#### 2. Performance Effectiveness: [Yes/No/Partially]
+**Metric Changes:**
+- [Metric Name]: [Old Value] → [New Value] ([+/-X%])
+- [Continue for all key metrics]
+
+**Performance Summary:** [1-2 sentences on performance effectiveness]
+
+#### 3. Success Factors
+**Root Cause:** [Primary reason for improvement, prioritizing correctness factors]
+**Key Changes:**
+- [Specific code change 1] → [Impact on correctness and performance]
+- [Specific code change 2] → [Impact on correctness and performance]
+
+#### 4. Failure Analysis
+**Root Cause:** [Why changes didn't work, considering correctness issues first]
+**Issues:**
+- [Problem 1]: [Explanation with correctness/performance classification]
+- [Problem 2]: [Explanation with correctness/performance classification]
+
+#### 5. Next Opportunities
+**High Priority (Correctness-First):**
+1. [Correctness Opportunity 1] - [Expected impact on correctness and performance]
+2. [Performance Opportunity 1] - [Expected impact, ensuring correctness preservation]
+
+**Bottlenecks:** [Main limitations, categorized by correctness vs performance]
+
+#### 6. Recommendations
+**Do Next (Correctness-First Priority):**
+1. [Action 1] - [Priority: High/Medium/Low] - [Correctness/Performance focus]
+2. [Action 2] - [Priority: High/Medium/Low] - [Correctness/Performance focus]
+
+**Avoid:** [Changes likely to compromise correctness or be counterproductive]
+
+Keep each section concise. Use concrete numbers and specific code references. Always assess correctness impact before performance impact.

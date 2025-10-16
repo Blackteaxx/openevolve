@@ -247,6 +247,32 @@ class ExplanationConfig:
 
 
 @dataclass
+class ExperienceKBConfig:
+    """Configuration for Experience Knowledge Base (KB) feature"""
+
+    # Feature toggles
+    enabled: bool = False
+    include_in_prompt: bool = True
+
+    # Prompt templates/keys
+    # Key for the KB section template stored in .txt files
+    section_template_key: str = "experience_kb_section"
+    # Template keys used when generating KB updates
+    update_template_key: str = "experience_kb_update"
+    update_system_message_key: str = "experience_kb_system_message"
+
+    # Storage and limits
+    storage_dir: Optional[str] = None  # Defaults to <output_dir>/experience_kb
+    max_kb_bytes: int = 64 * 1024  # Max bytes of KB summary injected into prompt
+
+    # Update policy
+    min_improvement: float = 0.01  # Trigger KB update when combined_score improves by this delta
+    record_failures: bool = False  # Record negative learnings when score drops
+
+    # Optional dedicated LLM configuration for KB updates
+    llm: Optional[LLMConfig] = None
+
+@dataclass
 class DatabaseConfig:
     """Configuration for the program database"""
 
@@ -364,6 +390,7 @@ class Config:
     evaluator: EvaluatorConfig = field(default_factory=EvaluatorConfig)
     evolution_trace: EvolutionTraceConfig = field(default_factory=EvolutionTraceConfig)
     explanation: ExplanationConfig = field(default_factory=ExplanationConfig)
+    experience_kb: ExperienceKBConfig = field(default_factory=ExperienceKBConfig)
 
     # Evolution settings
     diff_based_evolution: bool = True
@@ -391,7 +418,15 @@ class Config:
 
         # Update top-level fields
         for key, value in config_dict.items():
-            if key not in ["llm", "prompt", "database", "evaluator", "evolution_trace", "explanation"] and hasattr(config, key):
+            if key not in [
+                "llm",
+                "prompt",
+                "database",
+                "evaluator",
+                "evolution_trace",
+                "explanation",
+                "experience_kb",
+            ] and hasattr(config, key):
                 setattr(config, key, value)
 
         # Update nested configs
@@ -427,6 +462,18 @@ class Config:
                     exp_llm_dict["evaluator_models"] = [LLMModelConfig(**m) for m in exp_llm_dict["evaluator_models"]]
                 exp_dict["llm"] = LLMConfig(**exp_llm_dict)
             config.explanation = ExplanationConfig(**exp_dict)
+
+        # Experience KB config
+        if "experience_kb" in config_dict:
+            kb_dict = config_dict["experience_kb"] if isinstance(config_dict["experience_kb"], dict) else {}
+            if isinstance(kb_dict, dict) and "llm" in kb_dict and isinstance(kb_dict["llm"], dict):
+                kb_llm_dict = dict(kb_dict["llm"])  # shallow copy
+                if "models" in kb_llm_dict:
+                    kb_llm_dict["models"] = [LLMModelConfig(**m) for m in kb_llm_dict["models"]]
+                if "evaluator_models" in kb_llm_dict:
+                    kb_llm_dict["evaluator_models"] = [LLMModelConfig(**m) for m in kb_llm_dict["evaluator_models"]]
+                kb_dict["llm"] = LLMConfig(**kb_llm_dict)
+            config.experience_kb = ExperienceKBConfig(**kb_dict)
 
         # Backward compatibility: reflect use_explanation flag into explanation.enabled
         if getattr(config, "use_explanation", None) is not None:
@@ -530,6 +577,33 @@ class Config:
                         "retry_delay": getattr(self.explanation.llm, "retry_delay", None),
                     }
                     if getattr(self.explanation, "llm", None) is not None
+                    else None
+                ),
+            },
+            "experience_kb": {
+                "enabled": self.experience_kb.enabled,
+                "include_in_prompt": self.experience_kb.include_in_prompt,
+                "section_template_key": self.experience_kb.section_template_key,
+                "update_template_key": self.experience_kb.update_template_key,
+                "update_system_message_key": self.experience_kb.update_system_message_key,
+                "storage_dir": self.experience_kb.storage_dir,
+                "max_kb_bytes": self.experience_kb.max_kb_bytes,
+                "min_improvement": self.experience_kb.min_improvement,
+                "record_failures": self.experience_kb.record_failures,
+                "llm": (
+                    {
+                        "models": [asdict(m) for m in getattr(self.experience_kb.llm, "models", [])],
+                        "evaluator_models": [asdict(m) for m in getattr(self.experience_kb.llm, "evaluator_models", [])],
+                        "api_base": getattr(self.experience_kb.llm, "api_base", None),
+                        "api_key": getattr(self.experience_kb.llm, "api_key", None),
+                        "temperature": getattr(self.experience_kb.llm, "temperature", None),
+                        "top_p": getattr(self.experience_kb.llm, "top_p", None),
+                        "max_tokens": getattr(self.experience_kb.llm, "max_tokens", None),
+                        "timeout": getattr(self.experience_kb.llm, "timeout", None),
+                        "retries": getattr(self.experience_kb.llm, "retries", None),
+                        "retry_delay": getattr(self.experience_kb.llm, "retry_delay", None),
+                    }
+                    if getattr(self.experience_kb, "llm", None) is not None
                     else None
                 ),
             },

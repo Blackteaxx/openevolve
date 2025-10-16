@@ -113,9 +113,9 @@ def evaluate(
         failure_details_summary = []
         for status, failure in representative_failures.items():
             text = failure.get("text", "No additional error text.")
-            if len(text) > 50:
-                text = text[:50] + "..."
-            failure_details_summary.append(f"- Status: {status}, Details (first 50 chars of Output): {text}")
+            if len(text) > 300:
+                text = text[-300:] + "..."
+            failure_details_summary.append(f"- Status: {status}, Details (last 300 chars of Output): {text}")
 
         # Join the summaries for a comprehensive error message
         failures_text = "\n".join(failure_details_summary)

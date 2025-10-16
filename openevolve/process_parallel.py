@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 from openevolve.config import Config
 from openevolve.database import Program, ProgramDatabase
 from openevolve.utils.metrics_utils import safe_numeric_average
+from openevolve.experience_kb_service import ExperienceKBService, KBUpdateResult
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,10 @@ class SerializableResult:
     # Explanation prompt/response for logging
     explanation_prompt: Optional[Dict[str, str]] = None
     explanation_response: Optional[str] = None
+    # Experience KB prompt/response for logging
+    experience_kb_prompt: Optional[Dict[str, str]] = None
+    experience_kb_response: Optional[str] = None
+    experience_kb_summary: Optional[str] = None
 
 
 def _worker_init(
@@ -51,6 +56,7 @@ def _worker_init(
     global _worker_llm_ensemble
     global _worker_prompt_sampler
     global _worker_explanation_service
+    global _worker_experience_kb_service
 
     # Store config for later use
     # Reconstruct Config object from nested dictionaries
@@ -62,6 +68,7 @@ def _worker_init(
         LLMModelConfig,
         PromptConfig,
         ExplanationConfig,
+        ExperienceKBConfig,
     )
 
     # Reconstruct model objects
@@ -100,16 +107,30 @@ def _worker_init(
             exp_dict["llm"] = LLMConfig(**exp_llm_dict)
         explanation_config = ExplanationConfig(**exp_dict)
 
+    # Experience KB config (optional) with dedicated LLM reconstruction
+    experience_kb_config = None
+    if "experience_kb" in config_dict and isinstance(config_dict["experience_kb"], dict):
+        kb_dict = dict(config_dict["experience_kb"])  # shallow copy
+        if "llm" in kb_dict and isinstance(kb_dict["llm"], dict):
+            kb_llm_dict = dict(kb_dict["llm"])  # shallow copy
+            if "models" in kb_llm_dict and isinstance(kb_llm_dict["models"], list):
+                kb_llm_dict["models"] = [LLMModelConfig(**m) for m in kb_llm_dict["models"]]
+            if "evaluator_models" in kb_llm_dict and isinstance(kb_llm_dict["evaluator_models"], list):
+                kb_llm_dict["evaluator_models"] = [LLMModelConfig(**m) for m in kb_llm_dict["evaluator_models"]]
+            kb_dict["llm"] = LLMConfig(**kb_llm_dict)
+        experience_kb_config = ExperienceKBConfig(**kb_dict)
+
     _worker_config = Config(
         llm=llm_config,
         prompt=prompt_config,
         database=database_config,
         evaluator=evaluator_config,
         explanation=explanation_config if explanation_config else None,
+        experience_kb=experience_kb_config if experience_kb_config else ExperienceKBConfig(),
         **{
             k: v
             for k, v in config_dict.items()
-            if k not in ["llm", "prompt", "database", "evaluator", "explanation"]
+            if k not in ["llm", "prompt", "database", "evaluator", "explanation", "experience_kb"]
         },
     )
     _worker_evaluation_file = evaluation_file
@@ -119,6 +140,7 @@ def _worker_init(
     _worker_llm_ensemble = None
     _worker_prompt_sampler = None
     _worker_explanation_service = None
+    _worker_experience_kb_service = None
 
 
 def _lazy_init_worker_components():
@@ -127,6 +149,7 @@ def _lazy_init_worker_components():
     global _worker_llm_ensemble
     global _worker_prompt_sampler
     global _worker_explanation_service
+    global _worker_experience_kb_service
 
     if _worker_llm_ensemble is None:
         from openevolve.llm.ensemble import LLMEnsemble
@@ -190,6 +213,38 @@ def _lazy_init_worker_components():
                 config=explanation_cfg,
             )
 
+    # Initialize Experience KB service if enabled
+    if _worker_experience_kb_service is None:
+        kb_cfg = getattr(_worker_config, "experience_kb", None)
+        if kb_cfg and getattr(kb_cfg, "enabled", False):
+            try:
+                # Reuse TemplateManager from prompt sampler
+                template_manager = _worker_prompt_sampler.template_manager
+                # Prefer dedicated KB LLM if provided, else None (service tolerates None)
+                from openevolve.llm.ensemble import LLMEnsemble
+                kb_llm = None
+                if getattr(kb_cfg, "llm", None) and getattr(kb_cfg.llm, "models", None):
+                    kb_llm = LLMEnsemble(kb_cfg.llm.models)
+
+                # Resolve output dir for worker
+                output_dir = None
+                try:
+                    # Will be set later via set_output_dir from db_snapshot
+                    output_dir = None
+                except Exception:
+                    output_dir = None
+
+                _worker_experience_kb_service = ExperienceKBService(
+                    template_manager=template_manager,
+                    config=kb_cfg,
+                    llm_ensemble=kb_llm,
+                    output_dir=output_dir,
+                )
+            except Exception as e:
+                # If KB service init fails, log and continue without it
+                logger.error(f"Failed to initialize ExperienceKBService: {e}")
+                _worker_experience_kb_service = None
+
 
 def _run_iteration_worker(
     iteration: int,
@@ -246,13 +301,25 @@ def _run_iteration_worker(
         # - 不再传入 previous_programs（用户建议去掉）
         # - 直接传入 parent_metrics 以供 Top Block 的 Parent vs Current 计算使用
         # - 传入 current_explanation（若存在），在顶部 Current Program 下展示
+        # KB: Prepare experience KB summary if enabled
+        experience_kb_summary = ""
+        kb_cfg = getattr(_worker_config, "experience_kb", None)
+        if kb_cfg and getattr(kb_cfg, "enabled", False) and getattr(kb_cfg, "include_in_prompt", True):
+            try:
+                # Update storage dir to worker snapshot output_dir if provided
+                if _worker_experience_kb_service and db_snapshot.get("output_dir"):
+                    _worker_experience_kb_service.set_output_dir(db_snapshot.get("output_dir"))
+                if _worker_experience_kb_service:
+                    experience_kb_summary = _worker_experience_kb_service.get_summary(
+                        max_bytes=getattr(kb_cfg, "max_kb_bytes", None)
+                    )
+            except Exception:
+                experience_kb_summary = ""
         prompt = _worker_prompt_sampler.build_prompt(
             current_program=parent.code,
             program_metrics=parent.metrics,
             current_explanation=parent.metadata.get("explanation"),
-            # 使用祖父程序（parent 的 parent）作为对照基线
             parent_program=grand_parent.code if grand_parent else None,
-            # 指标对比也改为祖父的指标
             parent_metrics=grand_parent.metrics if grand_parent else None,
             top_programs=[p.to_dict() for p in programs_for_prompt],
             inspirations=[p.to_dict() for p in inspirations],
@@ -261,6 +328,9 @@ def _run_iteration_worker(
             diff_based_evolution=_worker_config.diff_based_evolution,
             program_artifacts=parent_artifacts,
             feature_dimensions=db_snapshot.get("feature_dimensions", []),
+            experience_kb_summary=experience_kb_summary,
+            # 传递自定义的 KB 区块模板键（若配置存在则使用）
+            experience_kb_section_key=getattr(kb_cfg, "section_template_key", None),
         )
 
         iteration_start = time.time()
@@ -408,9 +478,15 @@ def _run_iteration_worker(
         # Get artifacts
         artifacts = _worker_evaluator.get_pending_artifacts(child_id)
 
+        # Initialize optional explanation text
+        explanation_text = None
+
         # Optionally build and generate explanation via ExplanationService
         explanation_prompt = None
         explanation_response = None
+        # KB update prompt/response
+        experience_kb_prompt = None
+        experience_kb_response = None
         if use_explanation and _worker_explanation_service is not None:
             try:
                 # Get diff_blocks if available (for diff-based evolution)
@@ -438,6 +514,52 @@ def _run_iteration_worker(
                     explanation_text = explanation_response
             except Exception as ex:
                 logger.warning(f"ExplanationService generation failed: {ex}")
+
+        # Optionally compute and record Experience KB update
+        kb_update_result: Optional[KBUpdateResult] = None
+        if _worker_experience_kb_service is not None:
+            try:
+                parent_score = parent.metrics.get("combined_score")
+                child_score = child_metrics.get("combined_score")
+                # Basic policy: record all changes if record_failures, else only improvements
+                record = True
+                kb_cfg = getattr(_worker_config, "experience_kb", None)
+                if kb_cfg:
+                    if not kb_cfg.record_failures:
+                        try:
+                            record = (
+                                isinstance(parent_score, (int, float))
+                                and isinstance(child_score, (int, float))
+                                and float(child_score) - float(parent_score)
+                                >= float(getattr(kb_cfg, "min_improvement", 0.0))
+                            )
+                        except Exception:
+                            record = False
+                if record:
+                    # Prepare diff blocks string if available
+                    diff_blocks_str = None
+                    if _worker_config.diff_based_evolution and "diff_blocks" in locals():
+                        diff_blocks_str = format_diff_blocks_string(diff_blocks)
+
+                    experience_kb_prompt = _worker_experience_kb_service.build_update_prompt(
+                        metrics=child_metrics,
+                        artifacts=artifacts,
+                        changes_summary=changes_summary,
+                        current_code=child_code,
+                        parent_code=parent.code,
+                        language=_worker_config.language,
+                        iteration=iteration,
+                        task_description=_worker_config.prompt.system_message,
+                        parent_metrics=parent.metrics,
+                        diff_blocks=diff_blocks_str,
+                        explanation=explanation_text,
+                    )
+                    kb_update_result = asyncio.run(
+                        _worker_experience_kb_service.generate(experience_kb_prompt)
+                    )
+                    experience_kb_response = kb_update_result.response
+            except Exception as ex:
+                logger.warning(f"ExperienceKBService update failed: {ex}")
 
         # Create child program
         metadata = {
@@ -474,6 +596,9 @@ def _run_iteration_worker(
             iteration=iteration,
             explanation_prompt=explanation_prompt,
             explanation_response=explanation_response,
+            experience_kb_prompt=experience_kb_prompt,
+            experience_kb_response=experience_kb_response,
+            experience_kb_summary=(kb_update_result.summary if kb_update_result else experience_kb_summary),
         )
 
     except Exception as e:
@@ -561,6 +686,38 @@ class ProcessParallelController:
                 }
                 if config.explanation.llm
                 else None,
+            },
+            "experience_kb": {
+                "enabled": config.experience_kb.enabled,
+                "include_in_prompt": config.experience_kb.include_in_prompt,
+                "section_template_key": getattr(
+                    config.experience_kb, "section_template_key", "experience_kb_section"
+                ),
+                "update_template_key": config.experience_kb.update_template_key,
+                "update_system_message_key": config.experience_kb.update_system_message_key,
+                "storage_dir": config.experience_kb.storage_dir,
+                "max_kb_bytes": config.experience_kb.max_kb_bytes,
+                "min_improvement": config.experience_kb.min_improvement,
+                "record_failures": config.experience_kb.record_failures,
+                "llm": (
+                    {
+                        "models": [asdict(m) for m in getattr(config.experience_kb.llm, "models", [])],
+                        "evaluator_models": [
+                            asdict(m)
+                            for m in getattr(config.experience_kb.llm, "evaluator_models", [])
+                        ],
+                        "api_base": getattr(config.experience_kb.llm, "api_base", None),
+                        "api_key": getattr(config.experience_kb.llm, "api_key", None),
+                        "temperature": getattr(config.experience_kb.llm, "temperature", None),
+                        "top_p": getattr(config.experience_kb.llm, "top_p", None),
+                        "max_tokens": getattr(config.experience_kb.llm, "max_tokens", None),
+                        "timeout": getattr(config.experience_kb.llm, "timeout", None),
+                        "retries": getattr(config.experience_kb.llm, "retries", None),
+                        "retry_delay": getattr(config.experience_kb.llm, "retry_delay", None),
+                    }
+                    if getattr(config.experience_kb, "llm", None) is not None
+                    else None
+                ),
             },
             "max_iterations": config.max_iterations,
             "checkpoint_interval": config.checkpoint_interval,
@@ -807,6 +964,27 @@ class ProcessParallelController:
                         except Exception as ex:
                             logger.warning(
                                 f"Failed to log explanation prompt/response: {ex}"
+                            )
+
+                    # Log Experience KB update prompt/response if present
+                    if result.experience_kb_prompt:
+                        try:
+                            kb_template_key = (
+                                self.config.experience_kb.update_template_key
+                                if self.config.experience_kb
+                                else "experience_kb_update"
+                            )
+                            self.database.log_prompt(
+                                template_key=kb_template_key,
+                                program_id=child_program.id,
+                                prompt=result.experience_kb_prompt,
+                                responses=[result.experience_kb_response]
+                                if result.experience_kb_response
+                                else [],
+                            )
+                        except Exception as ex:
+                            logger.warning(
+                                f"Failed to log Experience KB prompt/response: {ex}"
                             )
 
                     # Island management

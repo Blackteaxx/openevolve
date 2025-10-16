@@ -26,7 +26,6 @@
 
 {evolution_history}
 
-
 # Task
 Suggest improvements to the program following the **CORRECTNESS FIRST, THEN PERFORMANCE** principle to increase its FITNESS SCORE.  
 
