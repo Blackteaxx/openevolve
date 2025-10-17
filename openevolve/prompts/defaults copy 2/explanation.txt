@@ -1,0 +1,32 @@
+**Context**
+Task: {task_description}
+Iteration: {iteration} | Language: {language}
+
+**Code**
+Current: {current_code_section}
+Parent: {parent_code_section}
+
+**Metrics**
+Current: {metrics}
+Parent: {parent_metrics}
+
+**Changes**
+{changes_summary}
+{diff_blocks}
+
+**Artifacts**
+{artifacts}
+
+Create a standalone summary for this program using the following exact format:
+
+- **Implementation**: [1–2 sentences; mention concrete structures/functions/lines if available]
+- **Performance**: [1 sentence; include at least one number from metrics]
+- **Feedback**: [1–2 sentences; tie a specific implementation choice to the observed result (speed/memory/correctness)]
+
+Focus on:
+1) Specific implementation details actually done (data structures, key loops, pruning, caching, IO policy)
+2) How these examples/archive/code_optimization_template_no_sandboxdetails affected performance (numbers, profiler hotspots)
+3) Implementation details relevant to the approach (algorithm class, complexity driver)
+4) Any evaluation feedback that provides insight (failed test names, top hotspot function)
+
+Keep it concise but informative. Follow the format exactly.

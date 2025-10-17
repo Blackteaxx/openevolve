@@ -1,32 +1,63 @@
-**Context**
-Task: {task_description}
-Iteration: {iteration} | Language: {language}
+## Task
 
-**Code**
-Current: {current_code_section}
-Parent: {parent_code_section}
+Your task is to conduct a comprehensive comparative analysis of a program that has been evolved for performance optimization, comparing the "Current" version against its "Parent" version. Your analysis must be structured into the three distinct sections detailed below and written in English. Maintain an objective, constructive, and educational tone throughout the analysis. While ensuring analytical depth, strive for concise and impactful language.
 
-**Metrics**
-Current: {metrics}
-Parent: {parent_metrics}
 
-**Changes**
+### Analysis Section
+
+#### 1. Performance Analysis
+
+- Quantitative Comparison: Based on the provided metrics, state clearly whether the Current version shows a performance improvement over the Parent version. Quantify the difference using specific data (e.g., "Execution time reduced by x ms/X%", "Combined Score decreased by y").
+
+- Dimensional Breakdown: Specify which aspects of performance have improved (e.g., execution speed, memory consumption, algorithmic time complexity). If there is no improvement or a regression, state that clearly.
+
+
+#### 2. Rational for Changes
+
+- Source of Change: Analyze the code diff and explain the core idea behind the modifications.
+
+- Underlying Principles: Connect the code changes to specific computer science knowledge, design patterns, or optimization techniques. Don't just state what was done (e.g., "Changed a list to a set"), but explain why it's effective by referencing its theoretical basis (e.g., "This leverages a hash table to reduce the average time complexity of membership testing from O(n) to O(1)").
+
+- Attribution of Outcome: Explain how these changes led to the observed performance results.
+
+- If performance improved, describe the underlying mechanism that makes the new code more efficient in terms of computational resources (CPU cycles, memory access, etc.).
+
+- If performance degraded or remained unchanged, propose a reasonable hypothesis explaining why the change was ineffective or counterproductive, and suggest a more viable alternative improvement.
+
+#### 3. Generalizable & Reusable Improvement Rules
+
+- Pattern Abstraction: From the effective changes observed, abstract one or two universal code optimization rules that are completely independent of the specific task logic and are reusable and generalizable across different scenarios.
+- Rule Details: Frame each rule as actionable advice for developers. Each rule should include three parts:
+- Rule Description: Clearly describe the optimization pattern.
+- Applicable Scenarios: Indicate the conditions under which the rule is most effective.
+- Potential Trade-offs: Explain the potential costs of applying the rule (e.g., may increase memory usage, sacrifice code readability).
+- Example: "Rule: For frequent membership testing, prefer using a Set over a List. Scenario: Most effective when dealing with large datasets where the primary operation is checking for an element's existence. Trade-off: A Set consumes slightly more memory than a List and does not preserve insertion order."
+
+## Context
+
+Here is the information for your analysis. Use all of it to inform your response.
+- Task Description: {task_description}
+- Iteration: {iteration}
+- Language: {language}
+- Parent Code (Previous Version):
+{parent_code_section}
+
+- Current Code (Evolved Version):
+{current_code_section}
+
+- Parent Metrics: {parent_metrics}
+- Current Metrics: {metrics}
+- Summary of Changes:
 {changes_summary}
+- Diff Blocks:
 {diff_blocks}
 
-**Artifacts**
+- Associated Artifacts:
 {artifacts}
 
-Create a standalone summary for this program using the following exact format:
+## Format
 
-- **Implementation**: [1–2 sentences; mention concrete structures/functions/lines if available]
-- **Performance**: [1 sentence; include at least one number from metrics]
-- **Feedback**: [1–2 sentences; tie a specific implementation choice to the observed result (speed/memory/correctness)]
+- Provide the analysis report in Markdown format.
+- Strictly use the specified English headings: #### Performance Analysis, #### Rationale for Changes, #### Generalizable & Reusable Improvement Rules.
+- Overall Requirement: The report must be concise and to the point, yet contain sufficient analytical depth and information. Avoid unnecessary verbiage.
 
-Focus on:
-1) Specific implementation details actually done (data structures, key loops, pruning, caching, IO policy)
-2) How these examples/archive/code_optimization_template_no_sandboxdetails affected performance (numbers, profiler hotspots)
-3) Implementation details relevant to the approach (algorithm class, complexity driver)
-4) Any evaluation feedback that provides insight (failed test names, top hotspot function)
-
-Keep it concise but informative. Follow the format exactly.

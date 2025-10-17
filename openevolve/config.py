@@ -193,6 +193,8 @@ class PromptConfig:
     template_dir: Optional[str] = None
     system_message: str = "system_message"
     evaluator_system_message: str = "evaluator_system_message"
+    # Short task description used by Explanation/KB services instead of full system message
+    task_description: Optional[str] = None
 
     # Number of examples to include in the prompt
     num_top_programs: int = 3
@@ -506,6 +508,7 @@ class Config:
                 "template_dir": self.prompt.template_dir,
                 "system_message": self.prompt.system_message,
                 "evaluator_system_message": self.prompt.evaluator_system_message,
+                "task_description": self.prompt.task_description,
                 "num_top_programs": self.prompt.num_top_programs,
                 "num_diverse_programs": self.prompt.num_diverse_programs,
                 "use_template_stochasticity": self.prompt.use_template_stochasticity,

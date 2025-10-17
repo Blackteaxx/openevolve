@@ -1,0 +1,171 @@
+# Configuration for code minimization example
+max_iterations: 80
+checkpoint_interval: 5
+language: python
+use_explanation: true
+
+llm:
+  primary_model: "Qwen3-32B"
+  primary_model_weight: 1
+
+  api_base: http://127.0.0.1:8080/v1
+  api_key: code-efficiency                     
+  temperature: 0.7
+  max_tokens: 8000
+  timeout: 120
+
+# Explanation configuration (dedicated LLM ensemble)
+explanation:
+  enabled: true
+  template_key: "explanation"
+  system_message_key: "explanation_system_message"
+  include_code: true
+  max_artifacts_bytes: 1024
+  # Choose which role to base defaults on when no dedicated LLM provided
+  # Options: "evolution" or "evaluator"
+  ensemble_role: "evolution"
+  # Dedicated LLM configuration for explanations
+  llm:
+    primary_model: "Qwen3-32B"
+    primary_model_weight: 1
+
+    api_base: http://127.0.0.1:8080/v1
+    api_key: code-efficiency                     
+    temperature: 0.7
+    max_tokens: 8000
+    timeout: 120
+
+# Prompt configuration
+prompt:
+  # 2025.9.17: Shed light on some requirements
+  # 2025.9.27: Add the requirements of IO Task and import blocks
+  # 2025.10.15: Add requirements of Optimization Principles
+  
+  system_message: |
+    ## Instructions
+    You are an expert competitive programmer and software engineer specializing in algorithm design and implementation. Your core principle is **CORRECTNESS FIRST, THEN PERFORMANCE** — make the program correct and robust before optimizing for efficiency.
+
+    Your task is to iteratively improve the given program for the following problem in Python3:
+
+    ## Problem Description
+    {task_description}
+
+    ## Optimization Principles
+    
+    **Ensure:**
+    1. **Correctness** — produce correct outputs for all required cases; preserve intended behavior outside targeted changes.
+    2. **Performance** — improve time complexity only after correctness; prefer algorithmic improvements over micro-optimizations.
+    3. **Code Quality** — keep the code readable and maintainable; avoid unnecessary refactors.
+    4. **Diversity** — explore alternative algorithms, data structures, or techniques( use built-in operators, packages etc. ) when appropriate.
+    5. **Pragmatism** — be bold but disciplined; iterate toward the most effective solution.
+
+    **Context-Driven Strategy:**
+    - Study evolution history, metrics, artifacts, and execution feedback.
+    - Learn from parent/inspiration programs and successful patterns.
+    - Prioritize substantial, high-impact changes over cosmetic tweaks.
+    - Consider algorithmic redesign, data structure choices, and implementation efficiency.
+
+    ## Allowed Imports Scope
+    You may only import libraries within the scope defined below. 
+    Prefer importing specific functions/classes instead of entire modules when possible.
+    ```python
+    import re
+    from re import match, search, sub, split, findall, finditer
+    import sys
+    from sys import maxsize, stdin
+    import json
+    from json import loads
+    import math
+    from math import floor, ceil, factorial, sqrt, isqrt, inf, log2, log10, sin, cos, tan, pi, e, comb, perm, gcd, lcm
+    import copy
+    import pickle
+    import heapq
+    from heapq import heappush, heappop, heapify, heappushpop, nlargest, nsmallest
+    import bisect
+    from bisect import bisect_left, bisect_right
+    import string
+    from string import ascii_letters, ascii_lowercase, ascii_uppercase, digits, whitespace, punctuation, hexdigits
+    import random
+    import operator
+    import itertools
+    from itertools import combinations, permutations, product, groupby, chain, accumulate, zip_longest
+    import functools
+    from functools import lru_cache, cache, reduce
+    import collections
+    from collections import OrderedDict, defaultdict, Counter, deque
+    from typing import Set, Dict, List, Optional, Tuple
+    import sortedcontainers # pip install sortedcontainers
+    from sortedcontainers import SortedList, SortedDict, SortedSet
+    ````
+
+    ## Output Format
+
+    * The program must read input directly from standard input (stdin) and write output directly to standard output (stdout).
+    * Ensure proper parsing and formatting as required by the problem statement.
+    * The solution must be directly runnable as a complete program.
+
+    ## Deliverable (Diff-Only EVOLVE Blocks)
+    - Do **not** rewrite the entire program.
+    - Focus on **targeted, substantial improvements** that meaningfully impact performance or correctness.
+    - Submit a single markdown code block with language identifier `python` that contains ONLY one or more EVOLVE diff blocks (no prose and no full program dump).
+    - Each modification MUST be wrapped exactly as:
+
+      ```python
+      EVOLVE-BLOCK-START
+      <<<<<<< SEARCH
+      [original code snippet]
+      =======
+      [modified code snippet]
+      >>>>>>> REPLACE
+      EVOLVE-BLOCK-END
+      ```
+    * **SEARCH section must match the original code snippet byte-for-byte** (including whitespace and indentation). If it doesn't match, the patch will fail.
+    * You may include **multiple** EVOLVE blocks in the **same single code block** when changing multiple, disjoint regions.
+    * Inside each block, only modify what's necessary; do not reformat unrelated lines.
+    * Do **not** include any hard-coded or self-generated test cases inside the code block.
+    * Do **not** add extra print statements or debug logs.
+    * Assume the system will provide input through stdin and expects correct output via stdout.
+    * **Prioritize correctness**: Ensure the solution runs correctly and passes all test cases before optimizing for efficiency.
+
+    ## Patch Hygiene (Strongly Recommended)
+    - Preserve original behavior outside targeted fixes; avoid changing variable names, interfaces, or formatting unless required.
+    - Maintain import scope rules above; if adding imports, include them via a separate EVOLVE block targeting the import region.
+    - Avoid introducing dependencies outside the allowed list.
+    - Ensure the proper import is present (add via diff if missing).
+    - Do not include self-generated tests or debug prints inside the diff blocks.
+
+    ## Submission Checklist
+    - SEARCH snippets match exactly; whitespace/indentation preserved.
+    - No extraneous text outside the single `python` code block.
+    - I/O is correct; outputs formatted per the problem requirements.
+    - Edge cases considered; complexity improved only after correctness.
+    - Imports comply with the allowed scope; import changes are diffed appropriately.
+
+  # 2025.9.17: Add Template Dir
+  template_dir: "/data/CodeEfficiency/openevolve/openevolve/prompts/defaults"
+
+  # 2025.9.26: Add num_top_programs and num_diverse_programs
+  num_top_programs: 1
+  num_diverse_programs: 2
+  include_artifacts: true
+
+# Database configuration
+database:
+  population_size: 200
+  archive_size: 200
+  num_islands: 5
+  elite_selection_ratio: 0.2
+  exploitation_ratio: 0.7
+  log_prompts: true # Enable logging of prompts for debugging
+
+# Evaluator configuration
+evaluator:
+  timeout: 2000
+  enable_artifacts: true      # Error feedback to LLM
+  cascade_evaluation: true
+  cascade_thresholds: [0.6]   # Set as the weight of pass rate to decide if the solution passes the cascade evaluation
+  parallel_evaluations: 2
+
+# Evolution settings
+diff_based_evolution: true
+max_code_length: 20000

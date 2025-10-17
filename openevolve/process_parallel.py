@@ -297,10 +297,6 @@ def _run_iteration_worker(
         ]
 
         # Build prompt
-        # 变更说明：
-        # - 不再传入 previous_programs（用户建议去掉）
-        # - 直接传入 parent_metrics 以供 Top Block 的 Parent vs Current 计算使用
-        # - 传入 current_explanation（若存在），在顶部 Current Program 下展示
         # KB: Prepare experience KB summary if enabled
         experience_kb_summary = ""
         kb_cfg = getattr(_worker_config, "experience_kb", None)
@@ -374,58 +370,6 @@ def _run_iteration_worker(
             raw_diff_blocks = extract_diffs(llm_response)
             diff_blocks = validate_diff_blocks(parent.code, raw_diff_blocks)
 
-            # 2025.9.17: Add Prompt Log - Custom logger for prompt flow
-            prompt_flow_logger = logging.getLogger("prompt_flow")
-            if not prompt_flow_logger.handlers:
-                # Create file handler for prompt flow log
-                import os
-
-                output_dir = db_snapshot.get("output_dir")
-                if output_dir:
-                    prompt_flow_log_path = os.path.join(output_dir, "prompt_flow.log")
-                else:
-                    prompt_flow_log_path = (
-                        "prompt_flow.log"  # Fallback to current directory
-                    )
-                prompt_handler = logging.FileHandler(
-                    prompt_flow_log_path, encoding="utf-8"
-                )
-                prompt_handler.setLevel(logging.INFO)
-                prompt_formatter = logging.Formatter(
-                    "%(asctime)s - %(levelname)s - %(message)s"
-                )
-                prompt_handler.setFormatter(prompt_formatter)
-                prompt_flow_logger.addHandler(prompt_handler)
-                prompt_flow_logger.setLevel(logging.INFO)
-                prompt_flow_logger.propagate = (
-                    False  # Prevent propagation to root logger
-                )
-
-            prompt_flow_logger.info("=" * 80)
-            prompt_flow_logger.info(f"Iteration: {iteration}")
-            prompt_flow_logger.info(f"\nLLM system message: {prompt['system']}")
-            prompt_flow_logger.info(f"\nLLM user message: {prompt['user']}")
-            prompt_flow_logger.info(f"\nLLM generated response: {llm_response}")
-            if raw_diff_blocks:
-                prompt_flow_logger.info(
-                    f"\nLLM extracted {len(raw_diff_blocks)} raw diff blocks: {raw_diff_blocks}"
-                )
-                if diff_blocks:
-                    prompt_flow_logger.info(
-                        f"\nValidated {len(diff_blocks)} valid diff blocks: {diff_blocks}"
-                    )
-                    if len(diff_blocks) < len(raw_diff_blocks):
-                        prompt_flow_logger.info(
-                            f"\nFiltered out {len(raw_diff_blocks) - len(diff_blocks)} invalid diff blocks"
-                        )
-                else:
-                    prompt_flow_logger.info(
-                        "\nNo valid diff blocks found after validation"
-                    )
-            else:
-                prompt_flow_logger.info("\nLLM generated no diff blocks")
-            prompt_flow_logger.info("=" * 80)
-
             if not diff_blocks:
                 return SerializableResult(
                     error="No valid diffs found in response", iteration=iteration
@@ -484,9 +428,6 @@ def _run_iteration_worker(
         # Optionally build and generate explanation via ExplanationService
         explanation_prompt = None
         explanation_response = None
-        # KB update prompt/response
-        experience_kb_prompt = None
-        experience_kb_response = None
         if use_explanation and _worker_explanation_service is not None:
             try:
                 # Get diff_blocks if available (for diff-based evolution)
@@ -502,7 +443,11 @@ def _run_iteration_worker(
                     parent_code=parent.code,
                     language=_worker_config.language,
                     iteration=iteration,
-                    task_description=_worker_config.prompt.system_message,
+                    # Prefer concise task description if provided; fallback to system_message
+                    task_description=(
+                        getattr(_worker_config.prompt, "task_description", None)
+                        or _worker_config.prompt.system_message
+                    ),
                     parent_metrics=parent.metrics,
                     diff_blocks=diff_blocks_str,
                 )
@@ -516,6 +461,8 @@ def _run_iteration_worker(
                 logger.warning(f"ExplanationService generation failed: {ex}")
 
         # Optionally compute and record Experience KB update
+        experience_kb_prompt = None
+        experience_kb_response = None
         kb_update_result: Optional[KBUpdateResult] = None
         if _worker_experience_kb_service is not None:
             try:
@@ -549,7 +496,10 @@ def _run_iteration_worker(
                         parent_code=parent.code,
                         language=_worker_config.language,
                         iteration=iteration,
-                        task_description=_worker_config.prompt.system_message,
+                        task_description=(
+                            getattr(_worker_config.prompt, "task_description", None)
+                            or _worker_config.prompt.system_message
+                        ),
                         parent_metrics=parent.metrics,
                         diff_blocks=diff_blocks_str,
                         explanation=explanation_text,
