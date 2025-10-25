@@ -42,6 +42,7 @@ class LLMModelConfig:
     
     # Reasoning parameters
     reasoning_effort: Optional[str] = None
+    enable_thinking: Optional[bool] = None
 
 
 @dataclass
@@ -76,6 +77,7 @@ class LLMConfig(LLMModelConfig):
     
     # Reasoning parameters (inherited from LLMModelConfig but can be overridden)
     reasoning_effort: Optional[str] = None
+    enable_thinking: Optional[bool] = None
 
     def __post_init__(self):
         """Post-initialization to set up model configurations"""
@@ -129,6 +131,7 @@ class LLMConfig(LLMModelConfig):
             "retry_delay": self.retry_delay,
             "random_seed": self.random_seed,
             "reasoning_effort": self.reasoning_effort,
+            "enable_thinking": getattr(self, "enable_thinking", None),
         }
         self.update_model_params(shared_config)
 
@@ -182,6 +185,7 @@ class LLMConfig(LLMModelConfig):
             "retry_delay": self.retry_delay,
             "random_seed": self.random_seed,
             "reasoning_effort": self.reasoning_effort,
+            "enable_thinking": getattr(self, "enable_thinking", None),
         }
         self.update_model_params(shared_config)
 
@@ -212,6 +216,10 @@ class PromptConfig:
     include_artifacts: bool = True
     max_artifact_bytes: int = 20 * 1024  # 20KB in prompt
     artifact_security_filter: bool = True
+
+    # Explanation injection controls
+    include_current_explanation_in_prompt: bool = True
+    include_explanations_in_history: bool = True
 
     # Feature extraction and program labeling
     suggest_simplification_after_chars: Optional[int] = (
@@ -262,14 +270,30 @@ class ExperienceKBConfig:
     # Template keys used when generating KB updates
     update_template_key: str = "experience_kb_update"
     update_system_message_key: str = "experience_kb_system_message"
+    # Critical agent templates
+    critical_agent_template_key: str = "critical_agent"
+    critical_agent_system_message_key: str = "critical_agent_system_message"
 
     # Storage and limits
     storage_dir: Optional[str] = None  # Defaults to <output_dir>/experience_kb
     max_kb_bytes: int = 64 * 1024  # Max bytes of KB summary injected into prompt
 
+    # Summary controls
+    # full: inject entire markdown (trimmed by max_kb_bytes)
+    # random_rules: inject H1/H2 headers plus k random Rule blocks
+    summary_mode: str = "full"  # Options: "full", "random_rules"
+    random_rules_max_k: int = 5   # Randomly choose k in [0, max_k]
+
+    # Initial markdown creation via template
+    initial_markdown_template_path: Optional[str] = None
+
     # Update policy
     min_improvement: float = 0.01  # Trigger KB update when combined_score improves by this delta
     record_failures: bool = False  # Record negative learnings when score drops
+
+    # Diff application and retry
+    max_update_attempts: int = 3
+    require_all_matches: bool = False
 
     # Optional dedicated LLM configuration for KB updates
     llm: Optional[LLMConfig] = None
@@ -484,7 +508,7 @@ class Config:
         return config
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert configuration to a dictionary"""
+        """Convert configuration to a dictionary suitable for process workers and YAML"""
         return {
             # General settings
             "max_iterations": self.max_iterations,
@@ -492,63 +516,25 @@ class Config:
             "log_level": self.log_level,
             "log_dir": self.log_dir,
             "random_seed": self.random_seed,
-            # Component configurations
+            "language": self.language,
+            # Component configurations (use full dataclass serialization for nested configs)
             "llm": {
-                "models": self.llm.models,
-                "evaluator_models": self.llm.evaluator_models,
+                "models": [asdict(m) for m in self.llm.models],
+                "evaluator_models": [asdict(m) for m in self.llm.evaluator_models],
                 "api_base": self.llm.api_base,
+                "api_key": self.llm.api_key,
                 "temperature": self.llm.temperature,
                 "top_p": self.llm.top_p,
                 "max_tokens": self.llm.max_tokens,
                 "timeout": self.llm.timeout,
                 "retries": self.llm.retries,
                 "retry_delay": self.llm.retry_delay,
-            },
-            "prompt": {
-                "template_dir": self.prompt.template_dir,
-                "system_message": self.prompt.system_message,
-                "evaluator_system_message": self.prompt.evaluator_system_message,
-                "task_description": self.prompt.task_description,
-                "num_top_programs": self.prompt.num_top_programs,
-                "num_diverse_programs": self.prompt.num_diverse_programs,
-                "use_template_stochasticity": self.prompt.use_template_stochasticity,
-                "template_variations": self.prompt.template_variations,
-                # Note: meta-prompting features not implemented
-                # "use_meta_prompting": self.prompt.use_meta_prompting,
-                # "meta_prompt_weight": self.prompt.meta_prompt_weight,
-            },
-            "database": {
-                "db_path": self.database.db_path,
-                "in_memory": self.database.in_memory,
-                "population_size": self.database.population_size,
-                "archive_size": self.database.archive_size,
-                "num_islands": self.database.num_islands,
-                "elite_selection_ratio": self.database.elite_selection_ratio,
-                "exploration_ratio": self.database.exploration_ratio,
-                "exploitation_ratio": self.database.exploitation_ratio,
-                # Note: diversity_metric fixed to "edit_distance"
-                # "diversity_metric": self.database.diversity_metric,
-                "feature_dimensions": self.database.feature_dimensions,
-                "feature_bins": self.database.feature_bins,
-                "migration_interval": self.database.migration_interval,
-                "migration_rate": self.database.migration_rate,
-                "random_seed": self.database.random_seed,
-                "log_prompts": self.database.log_prompts,
-            },
-            "evaluator": {
-                "timeout": self.evaluator.timeout,
-                "max_retries": self.evaluator.max_retries,
-                # Note: resource limits not implemented
-                # "memory_limit_mb": self.evaluator.memory_limit_mb,
-                # "cpu_limit": self.evaluator.cpu_limit,
-                "cascade_evaluation": self.evaluator.cascade_evaluation,
-                "cascade_thresholds": self.evaluator.cascade_thresholds,
-                "parallel_evaluations": self.evaluator.parallel_evaluations,
-                # Note: distributed evaluation not implemented
-                # "distributed": self.evaluator.distributed,
-                "use_llm_feedback": self.evaluator.use_llm_feedback,
-                "llm_feedback_weight": self.evaluator.llm_feedback_weight,
-            },
+            "reasoning_effort": getattr(self.llm, "reasoning_effort", None),
+            "enable_thinking": getattr(self.llm, "enable_thinking", None),
+        },
+            "prompt": asdict(self.prompt),
+            "database": asdict(self.database),
+            "evaluator": asdict(self.evaluator),
             "evolution_trace": {
                 "enabled": self.evolution_trace.enabled,
                 "format": self.evolution_trace.format,
@@ -578,6 +564,8 @@ class Config:
                         "timeout": getattr(self.explanation.llm, "timeout", None),
                         "retries": getattr(self.explanation.llm, "retries", None),
                         "retry_delay": getattr(self.explanation.llm, "retry_delay", None),
+                        "reasoning_effort": getattr(self.explanation.llm, "reasoning_effort", None),
+                        "enable_thinking": getattr(self.explanation.llm, "enable_thinking", None),
                     }
                     if getattr(self.explanation, "llm", None) is not None
                     else None
@@ -589,10 +577,17 @@ class Config:
                 "section_template_key": self.experience_kb.section_template_key,
                 "update_template_key": self.experience_kb.update_template_key,
                 "update_system_message_key": self.experience_kb.update_system_message_key,
+                "critical_agent_template_key": getattr(self.experience_kb, "critical_agent_template_key", "critical_agent"),
+                "critical_agent_system_message_key": getattr(self.experience_kb, "critical_agent_system_message_key", "critical_agent_system_message"),
+                "initial_markdown_template_path": self.experience_kb.initial_markdown_template_path,
                 "storage_dir": self.experience_kb.storage_dir,
                 "max_kb_bytes": self.experience_kb.max_kb_bytes,
+                "summary_mode": getattr(self.experience_kb, "summary_mode", "full"),
+                "random_rules_max_k": getattr(self.experience_kb, "random_rules_max_k", 5),
                 "min_improvement": self.experience_kb.min_improvement,
                 "record_failures": self.experience_kb.record_failures,
+                "max_update_attempts": getattr(self.experience_kb, "max_update_attempts", 3),
+                "require_all_matches": getattr(self.experience_kb, "require_all_matches", False),
                 "llm": (
                     {
                         "models": [asdict(m) for m in getattr(self.experience_kb.llm, "models", [])],
@@ -605,6 +600,8 @@ class Config:
                         "timeout": getattr(self.experience_kb.llm, "timeout", None),
                         "retries": getattr(self.experience_kb.llm, "retries", None),
                         "retry_delay": getattr(self.experience_kb.llm, "retry_delay", None),
+                        "reasoning_effort": getattr(self.experience_kb.llm, "reasoning_effort", None),
+                        "enable_thinking": getattr(self.experience_kb.llm, "enable_thinking", None),
                     }
                     if getattr(self.experience_kb, "llm", None) is not None
                     else None
@@ -613,6 +610,8 @@ class Config:
             # Evolution settings
             "diff_based_evolution": self.diff_based_evolution,
             "max_code_length": self.max_code_length,
+            # Custom flags
+            "use_explanation": self.use_explanation,
             # Early stopping settings
             "early_stopping_patience": self.early_stopping_patience,
             "convergence_threshold": self.convergence_threshold,

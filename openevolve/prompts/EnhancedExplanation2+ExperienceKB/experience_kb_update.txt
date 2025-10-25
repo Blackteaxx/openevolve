@@ -1,0 +1,60 @@
+You are the "Experience Summarizer." Read the context below and produce ONLY a complete Markdown document that summarizes Successes, Failures, Insights, and Next Explorations. Do not output JSON or any text outside the Markdown. Keep it concise, evidence-driven, and reusable.
+
+================ CONTEXT ================
+Task: {task_description}
+Iteration: {iteration} | Language: {language}
+
+Code
+- Current: {current_code_section}
+- Parent: {parent_code_section}
+
+Metrics
+- Current: {metrics}
+- Parent: {parent_metrics}
+
+Changes
+{changes_summary}
+{diff_blocks}
+
+Artifacts
+{artifacts}
+
+Explanation
+{explanation}
+
+Existing Experience KB (Markdown)
+{existing_kb_markdown}
+=============== END CONTEXT ==============
+
+STRICT RULES
+- Output exactly one Markdown document using the structure in “OUTPUT SKELETON” below.
+- Each bullet ≤ 2 lines. Avoid long paragraphs.
+- Use at least 3 different perspective tags across the whole doc: [Algo], [Eng], [Perf], [Robust], [Data/IO], [Agent/Prompt], [Env].
+- Integrate new learnings, keep multi-view diverse experiences; prune outdated or redundant advice.
+- Every conclusion should be evidence-driven. Use this compact evidence format:
+  **Evidence**: Δ<metric> = <abs> (<rel>); n=<sample_size>; artifact#<id>
+  Example: **Evidence**: Δruntime = -120ms (-18%); n=20; artifact#42
+- If evidence is missing or insufficient, write: **Evidence**: insufficient (needs n≥X)
+- “When” = the trigger/conditions under which an item applies (e.g., input scale, data skew, hardware).
+- For “Explore Next”, include minimal change (≤2 bullets) and a probe (metric, n, pass/stop criteria), plus a brief risk.
+
+OUTPUT SKELETON
+(Produce only the following sections and headings—fill them with your content.)
+
+# Experience KB — Lite (S/F/I/E)
+
+## Success (Keep & Reuse)
+- **[Tag] Title** — What: <brief> | Why: <brief> | When: <trigger> | **Evidence**: Δ…; n=…; artifact#…
+- **[Tag] Title** — What: <brief> | Why: <brief> | When: <trigger> | **Evidence**: Δ…; n=…; artifact#…
+
+## Failure (Avoid & Guardrails)
+- **[Tag] Anti-pattern** — Symptom: <brief> | Root cause: <brief> | Fix/Guard: <brief> | **Evidence**: Δ…; n=…; artifact#…
+- **[Tag] Anti-pattern** — Symptom: <brief> | Root cause: <brief> | Fix/Guard: <brief> | **Evidence**: Δ…; n=…; artifact#…
+
+## Insights (Generalizable Lessons)
+- **Insight A** — Observation: <brief> | Mechanism: <brief> | Scope: <where it generalizes> | Caveat: <when it fails> | **Evidence**: <compact or “insufficient”>
+- **Insight B** — Observation: <brief> | Mechanism: <brief> | Scope: <where it generalizes> | Caveat: <when it fails> | **Evidence**: <compact or “insufficient”>
+
+## Explore Next (Hypotheses & Probes)
+- **H1** — What: <brief> | **Minimal change**: • <small edit 1> • <small edit 2> | **Probe**: metric=<name>, n=<size>, pass if <criterion>, stop if <criterion> | Risk: <brief>
+- **H2** — What: <brief> | **Minimal change**: • <small edit 1> • <small edit 2> | **Probe**: metric=<name>, n=<size>, pass if <criterion>, stop if <criterion> | Risk: <brief>

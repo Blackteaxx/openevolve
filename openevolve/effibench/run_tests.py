@@ -74,7 +74,7 @@ def run_tests(
     test_cases: list,
     evaluator: str,
     test_runner: str | None = None,
-    time_limit: int = 20,  # Increased from 10 to 20 seconds
+    time_limit: int = 10,
     memory_limit: int = 1024,
     early_stop: bool = True,
     raise_on_error: bool = True,

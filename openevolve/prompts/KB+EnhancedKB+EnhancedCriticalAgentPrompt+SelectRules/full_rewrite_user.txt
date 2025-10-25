@@ -1,0 +1,34 @@
+# Current Program Information
+
+## Current Program
+{current_program}
+
+{current_explanation_section}
+
+## Parent Program
+{parent_program_section}
+
+## Current Metrics
+{current_metrics}
+
+## Parent vs Current (Metrics Diff)
+{parent_vs_current_section}
+
+## Current Artifacts
+{current_artifacts_section}
+
+# Program Evolution History
+{evolution_history}
+
+# Task
+Rewrite the program to improve its FITNESS SCORE.
+The system maintains diversity across these dimensions: {feature_dimensions}
+Different solutions with similar fitness but different features are valuable.
+Provide the complete new program code.
+
+IMPORTANT: Make sure your rewritten program maintains the same inputs and outputs
+as the original program, but with improved internal implementation.
+
+```{language}
+# Your rewritten program here
+```

@@ -1,0 +1,160 @@
+## Core Task
+
+Your task is to act as the custodian of the categorized code rules markdown file. Based on the provided context of a successful local performance optimization, you must propose updates to this central knowledge base by generating a diff. Your response should consist of your thought process followed by final diffs.
+
+Your generated diff can be a combination of the following actions:
+
+1. **ADD**: Introduce a new, universally applicable rule under the correct category.
+2. **REPLACE**: Overwrite an existing rule to refine it.
+3. **DELETE**: Remove an incorrect, outdated, or redundant rule.
+
+## Core Maintenance Principles (Must Adhere)
+
+1. Prefer Refinement over Addition: Your primary goal is to maintain the conciseness and authority of the knowledge base. If a related concept already exists, you must prioritize refining the existing rule via REPLACE instead of adding a new one via ADD. Only use ADD when the optimization principle is genuinely new and has no conceptual overlap.
+
+2. Eliminate Redundancy and Contradiction: Before proposing any change, you must ensure it does not duplicate or contradict existing rules. If a new finding conflicts with an existing rule, your task is to resolve the conflict by modifying the Apply condition or replacing the old rule with a more precise one.
+
+## Thinking Process
+
+Before generating any diff, you can follow these thinking steps (internally or externally) to generate thinking content step by step:
+
+1. Search Phase: First, thoroughly search the existing knowledge base for any rules related to the current performance optimization. Look for conceptual similarities, not just keyword matches.
+
+2. Decision Phase: Based on your search results, make a decision:
+
+  - Case A: Fully Covered? If the optimization principle is perfectly covered by an existing rule -> Output nothing.
+
+  - Case B: Conceptually Related? If a related rule exists but can be improved, generalized, or made more precise -> Prepare a REPLACE operation.
+
+  - Case C: Genuinely Novel? If the principle is entirely new and has no conceptual overlap with any existing rules -> Prepare an ADD operation.
+
+3. Formulation Phase: When preparing an ADD or REPLACE operation, formulate the rule's core principle to be concrete and actionable. Avoid high-level platitudes. The principle should describe a specific technique (e.g., "Use sentinels to eliminate boundary checks in loops") rather than a vague goal (e.g., "Optimize loops"). However, ensure the rule remains general enough to apply across different problems, avoiding task-specific details like variable names.
+
+4. Action Phase: Generate the corresponding diff based on your decision.
+
+## Context for Analysis
+
+Task: {task_description}
+Iteration: {iteration} | Language: {language}
+
+Code
+- Current: {current_code_section}
+- Parent: {parent_code_section}
+
+Metrics
+- Current: {metrics}
+- Parent: {parent_metrics}
+
+Changes
+{changes_summary}
+{diff_blocks}
+
+Artifacts
+{artifacts}
+
+Explanation
+{explanation}
+
+**Existing Experience KB (Must exactly match in the output)**
+{existing_kb_markdown}
+
+## Strict Rules for Output
+
+1. Use the Official Concise Format: Every rule MUST follow this exact structure. The title line combines the ID and the core principle, using a Level 3 Markdown heading.
+
+```markdown
+### Rule ID: RXXX: [The Core Principle of the Rule]
+- **Apply**: [When to use this rule] | **Cost**: [Known trade-offs or costs]
+- **Why**: [Brief explanation of the underlying mechanism]
+- **Origin**: [Task Name: Iteration ID that established this rule]
+```
+
+2. Mandatory Categorization & Descriptions: You must place new rules under the most appropriate official English category heading. To ensure accuracy, please refer to the following category descriptions:
+
+  - ## I. Algorithmic & Data Structure Principles (Concerns algorithm design, data structure choices, loop strategies, single/multi-pass processing, etc.)
+
+  - ## II. Memory & Locality Optimizations (Concerns caching, memory layout, avoiding unnecessary allocations, data alignment, etc.)
+
+  - ## III. Language-Specific Idioms (Concerns efficient use of language-specific features or standard libraries, e.g., Python's itertools)
+
+  - ## IV. I/O & System Call Efficiency (Concerns file reading/writing, network communication, system call optimization, etc.)
+
+3. Single-Pass Diff Output: You are expected to perform a complete thought process to analyze the context and decide on all necessary changes (ADD, REPLACE, DELETE). After this reasoning, you must generate a final, consolidated diff in a single pass.
+
+4. The content inside <<<<<<< SEARCH must **exactly** and uniquely match a block of text in the Existing **Experience KB Content**. For ADD operations, this block **must contain the full, complete rule preceding the desired insertion point** to ensure precise placement.
+
+5. Universality is Key: Rules MUST be **task-agnostic, reusable, and generalizable** across different scenarios. They should capture a fundamental performance principle, not a one-off trick. All rules must be written in clear English.
+
+6. Unique Rule ID: When performing an ADD operation, you must assign a new, unique rule ID, typically by incrementing the highest existing ID.
+
+7. Thinking Process: You **must output thinking process** before generate diffs. 
+
+## Output Skeleton (Examples of the concise format in diffs)
+
+### To REPLACE an existing rule:
+
+```markdown
+<<<<<<< SEARCH
+### Rule ID: R001: An old, less precise principle.
+- **Apply**: ... | **Cost**: ...
+- **Why**: ...
+- **Origin**: old_iter_id
+=======
+### Rule ID: R001: A refined and more accurate principle.
+- **Apply**: More specific conditions | **Cost**: Updated trade-offs
+- **Why**: A clearer explanation.
+- **Origin**: old_iter_id (Refined by: new_iter_id)
+>>>>>>> REPLACE
+```
+
+### To ADD a new rule:
+
+#### To an EXISTING category
+
+The <<<<<<< SEARCH block must contain the complete text of the last existing rule within the target category. This provides an unambiguous anchor for the insertion.
+
+<<<<<<< SEARCH
+### Rule ID: R002: The last existing principle in this category.
+- **Apply**: ... | **Cost**: ...
+- **Why**: ...
+- **Origin**: R002_iter_id
+=======
+### Rule ID: R002: The last existing principle in this category.
+- **Apply**: ... | **Cost**: ...
+- **Why**: ...
+- **Origin**: R002_iter_id
+
+### Rule ID: R003: A new, valuable principle.
+- **Apply**: ... | **Cost**: ...
+- **Why**: ...
+- **Origin**: new_iter_id
+>>>>>>> REPLACE
+
+#### To a NEW category
+
+The <<<<<<< SEARCH block must contain the title of the preceding category.
+
+```markdown
+<<<<<<< SEARCH
+## IV. I/O & System Call Efficiency
+=======
+## IV. I/O & System Call Efficiency
+
+### Rule ID: R003: A new, valuable principle.
+- **Apply**: ... | **Cost**: ...
+- **Why**: ...
+- **Origin**: new_iter_id
+>>>>>>> REPLACE
+```
+
+### To DELETE a rule:
+
+```markdown
+<<<<<<< SEARCH
+### Rule ID: R00Z: A principle that was found to be incorrect.
+- **Apply**: ... | **Cost**: ...
+- **Why**: ...
+- **Origin**: some_iter_id
+=======
+>>>>>>> REPLACE
+```

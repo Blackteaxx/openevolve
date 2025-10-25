@@ -144,7 +144,8 @@ class PromptSampler:
         # 1.1 当前程序解释（可选）
         # 说明：按需求在顶部区块呈现当前程序的解释，来源由调用方传入
         current_explanation_section = ""
-        if current_explanation:
+        use_expl = getattr(self.config, "include_current_explanation_in_prompt", True)
+        if use_expl and current_explanation:
             current_explanation_section = (
                 f"\n**Analysis of this Program and its diff:** \n{current_explanation}\n"
             )
@@ -692,7 +693,7 @@ class PromptSampler:
         # 6. Model Explanation（生成解释）
         explanation_section = ""
         explanation = program_metadata.get("explanation", "")
-        if explanation:
+        if explanation and getattr(self.config, "include_explanations_in_history", True):
             explanation_section = f"\n\n**Analysis of this Program and its diff:** \n{explanation}"
 
         # 组合所有部分

@@ -1,0 +1,66 @@
+Your task is to evaluate a proposed diff containing changes for the experience.md file. You will be given the existing rules, the proposed diff, and the analysis report that justifies the change. Based on a strict set of criteria, you must decide whether to APPROVE or REJECT the change. Your response should consist of your thought process followed by a final decision encapsulated in a JSON code block.
+
+## Context for Evaluation
+
+Task: {task_description}
+Iteration: {iteration} | Language: {language}
+
+Code
+- Current: {current_code_section}
+- Parent: {parent_code_section}
+
+Metrics
+- Current: {metrics}
+- Parent: {parent_metrics}
+
+Changes
+{changes_summary}
+{diff_blocks}
+
+Artifacts
+{artifacts}
+
+Explanation
+{explanation}
+
+Existing Experience KB (Markdown)
+{existing_kb_markdown}
+
+Proposed Diff:
+{proposed_diff}
+
+## Evaluation Criteria (You must strictly adhere to these)
+
+1. Generalizability & Universality: Is the rule truly independent of the specific task logic? Can it be applied to a wide range of problems? (HIGHEST PRIORITY)
+
+2. Evidence-Driven: Is the change strongly and clearly supported by the performance metrics and analysis in the report? Is the gain significant?
+
+3. Correct Formatting & Categorization: Does the diff correctly use the ## Category and ### Rule ID... structure? Is the placement of the new/modified rule under the correct category logical and justified? Does it follow the concise format precisely?
+
+4. Clarity & Actionability: Is the rule's principle and application scenario stated clearly and concisely? Is it unambiguous?
+
+5. Novelty & Necessity: Is this a genuinely new and valuable principle, or is it a trivial or redundant restatement of an existing rule?
+
+6. Technical Correctness: Is the underlying computer science principle cited in the rule technically accurate?
+
+## Strict Output Format
+
+- You should first output your step-by-step reasoning based on the evaluation criteria.
+
+- The final, definitive answer MUST be a single JSON object, enclosed within a json code block.
+
+- The JSON object must have exactly two keys: decision and reasoning.
+
+## Output Skeleton
+
+```markdown
+Your process of thinking...
+
+```json
+{{
+  "decision": "APPROVE",
+  "reasoning": "The proposed change introduces a well-founded, generalizable rule about memory optimization, strongly supported by the analysis report. The diff is correctly formatted and categorized."
+}}
+```
+
+```

@@ -1,0 +1,78 @@
+Your task is to evaluate a proposed diff containing changes for the experience.md file. You will be given the existing rules, the proposed diff, and the analysis report that justifies the change. Based on a strict set of criteria, you must decide whether to APPROVE or REJECT the change. Your response should consist of your thought process followed by a final decision encapsulated in a JSON code block.
+
+## Context for Evaluation
+
+Task: {task_description}
+Iteration: {iteration} | Language: {language}
+
+Code
+- Current: {current_code_section}
+- Parent: {parent_code_section}
+
+Metrics
+- Current: {metrics}
+- Parent: {parent_metrics}
+
+Changes
+{changes_summary}
+{diff_blocks}
+
+Artifacts
+{artifacts}
+
+Explanation
+{explanation}
+
+Existing Experience KB (Markdown)
+{existing_kb_markdown}
+
+Proposed Diff:
+{proposed_diff}
+
+## Evaluation Criteria (You must strictly adhere to these)
+
+1. Novelty & Necessity: (HIGHEST PRIORITY)
+
+  - Check for Duplication: Does the rule have a conceptual overlap with existing rules?
+
+  - Judge the Operation: If there is an overlap, is the diff a REPLACE operation for consolidation and refinement? An ADD operation that introduces a redundant concept must be REJECTED.
+
+  - Assess Value: Does this rule provide a genuinely valuable new insight?
+
+2. Generalizability & Universality: Is the rule truly independent of the specific task logic? Can it be applied to a wide range of problems?
+
+3. Evidence-Driven: Is the change strongly and clearly supported by the performance metrics and analysis in the report? Is the gain significant?
+
+4. Clarity & Actionability:
+
+  - Check for Contradiction: Does the rule contradict any existing rules?
+
+  - Resolve Conflicts: If a potential contradiction exists, does its Apply condition clearly define the scope to resolve the conflict? If it leads to ambiguity, it must be REJECTED.
+
+  - Clarity of Language: Are the rule's principle and application scenario stated clearly, concisely, and unambiguously?
+
+5. Correct Formatting & Categorization: Does the diff correctly use the ## Category and ### Rule ID... structure? Is the placement of the new/modified rule under the correct category logical and justified based on the category descriptions?
+
+6. Technical Correctness: Is the underlying computer science principle cited in the rule technically accurate?
+
+## Strict Output Format
+
+- You should first output your step-by-step reasoning based on the evaluation criteria.
+
+- The final, definitive answer MUST be a single JSON object, enclosed within a json code block.
+
+- The JSON object must have exactly two keys: decision and reasoning.
+
+## Output Skeleton
+
+```markdown
+Your process of thinking...
+
+```json
+{{
+  "decision": "APPROVE",
+  "reasoning": "The proposed change introduces a well-founded, generalizable rule about memory optimization, strongly supported by the analysis report. The diff is correctly formatted and categorized."
+}}
+```
+
+```

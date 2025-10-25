@@ -5,6 +5,7 @@ OpenAI API interface for LLMs
 import asyncio
 import logging
 import time
+import re
 from typing import Any, Dict, List, Optional, Union
 
 import openai
@@ -34,6 +35,7 @@ class OpenAILLM(LLMInterface):
         self.api_key = model_cfg.api_key
         self.random_seed = getattr(model_cfg, "random_seed", None)
         self.reasoning_effort = getattr(model_cfg, "reasoning_effort", None)
+        self.enable_thinking = getattr(model_cfg, "enable_thinking", None)
 
         # Set up API client
         # OpenAI client requires max_retries to be int, not None
@@ -62,9 +64,20 @@ class OpenAILLM(LLMInterface):
         )
 
     async def generate_with_context(
-        self, system_message: str, messages: List[Dict[str, str]], **kwargs
+        self,
+        system_message: str,
+        messages: List[Dict[str, str]],
+        enable_thinking: Optional[bool] = None,
+        **kwargs,
     ) -> str:
-        """Generate text using a system message and conversational context"""
+        """Generate text using a system message and conversational context.
+
+        Parameters
+        - system_message: system prompt content
+        - messages: chat messages list
+        - enable_thinking: when set, merges into extra_body.chat_template_kwargs.enable_thinking
+        - **kwargs: other generation parameters (temperature, top_p, max_tokens, etc.)
+        """
         # Prepare messages with system message
         formatted_messages = [{"role": "system", "content": system_message}]
         formatted_messages.extend(messages)
@@ -134,6 +147,34 @@ class OpenAILLM(LLMInterface):
             else:
                 params["seed"] = seed
 
+        # Forward extra_body if provided, and merge enable_thinking when set
+        extra_body = kwargs.get("extra_body")
+        if isinstance(extra_body, dict):
+            # Make a shallow copy to avoid mutating caller's dict
+            eb = dict(extra_body)
+        elif extra_body is not None:
+            # Non-dict provided; ignore but still allow enable_thinking injection
+            eb = {}
+        else:
+            eb = None
+
+
+        # Determine enable_thinking from explicit arg, kwargs, or model default
+        enable_thinking_value = (
+            enable_thinking
+            if enable_thinking is not None
+            else kwargs.get("enable_thinking", self.enable_thinking)
+        )
+        if enable_thinking_value is not None:
+            if eb is None:
+                eb = {}
+            chat_template_kwargs = eb.get("chat_template_kwargs", {})
+            chat_template_kwargs["enable_thinking"] = bool(enable_thinking_value)
+            eb["chat_template_kwargs"] = chat_template_kwargs
+
+        if eb is not None:
+            params["extra_body"] = eb
+
         # Attempt the API call with retries
         retries = kwargs.get("retries", self.retries)
         retry_delay = kwargs.get("retry_delay", self.retry_delay)
@@ -167,8 +208,17 @@ class OpenAILLM(LLMInterface):
         response = await loop.run_in_executor(
             None, lambda: self.client.chat.completions.create(**params)
         )
-        # Logging of system prompt, user message and response content
+        # Extract and sanitize response content by removing <think>...</think> sections
+        content = response.choices[0].message.content
+        if isinstance(content, str):
+            sanitized_content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL | re.IGNORECASE)
+        else:
+            sanitized_content = content
+
+        # Logging of API parameters and sanitized response content
         logger = logging.getLogger(__name__)
         logger.debug(f"API parameters: {params}")
-        logger.debug(f"API response: {response.choices[0].message.content}")
-        return response.choices[0].message.content
+        logger.debug(f"API response (include thinking): {content}")
+        logger.debug(f"API response: {sanitized_content}")
+        
+        return sanitized_content

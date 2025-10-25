@@ -75,13 +75,15 @@ def run_performance_benchmark(
     if not all_results:
         # If there are no results, return a default failure structure.
         analysis_results = {
-            "mean_runtime": float("inf"),
-            "std_dev": float("inf"),
-            "min_runtime": float("inf"),
-            "max_runtime": float("inf"),
+            "original_n": 0,
+            "n": 0,
+            "mean": float("inf"),
+            "std": float("inf"),
+            "min": float("inf"),
+            "max": float("inf"),
             "max_diff": float("inf"),
-            "ci_95": (float("inf"), float("inf")),
-            "trimmed_mean_runtime": float("inf"),
+            "95%_CI": (float("inf"), float("inf")),
+            "trimmed_mean": float("inf"),
         }
         return {
             "performance_analysis": analysis_results,
@@ -153,13 +155,15 @@ def run_performance_benchmark(
     else:
         # This path is taken if pass_rate < 1.0 or if all runs failed unexpectedly
         analysis_results = {
-            "mean_runtime": float("inf"),
-            "std_dev": float("inf"),
-            "min_runtime": float("inf"),
-            "max_runtime": float("inf"),
+            "original_n": 0,
+            "n": 0,
+            "mean": float("inf"),
+            "std": float("inf"),
+            "min": float("inf"),
+            "max": float("inf"),
             "max_diff": float("inf"),
-            "ci_95": (float("inf"), float("inf")),
-            "trimmed_mean_runtime": float("inf"),
+            "95%_CI": (float("inf"), float("inf")),
+            "trimmed_mean": float("inf"),
         }
 
     # Construct the final return dictionary as requested

@@ -1,6 +1,15 @@
-You are the "Experience Summarizer." Read the context below and produce ONLY a complete Markdown document that summarizes Successes, Failures, Insights, and Next Explorations. Do not output JSON or any text outside the Markdown. Keep it concise, evidence-driven, and reusable.
+## Core Task
 
-================ CONTEXT ================
+Your task is to act as the custodian of the categorized code rules markdown file. Based on the provided context of a successful local performance optimization, you must propose updates to this central knowledge base by generating a diff. Your primary responsibility is to place new or refined rules under the most appropriate category. Your generated diff can be a combination of the following actions:
+
+1. **ADD**: Introduce a new, universally applicable rule under the correct category.
+2. **REPLACE: Overwrite an existing rule to refine it.
+3. DELETE: Remove an incorrect, outdated, or redundant rule.
+
+If the successful change is already well-covered by existing rules, or if there's nothing to update, you must output nothing.
+
+## Context for Analysis
+
 Task: {task_description}
 Iteration: {iteration} | Language: {language}
 
@@ -22,39 +31,104 @@ Artifacts
 Explanation
 {explanation}
 
-Existing Experience KB (Markdown)
+**Existing Experience KB (Must exactly match in the output)**
 {existing_kb_markdown}
-=============== END CONTEXT ==============
 
-STRICT RULES
-- Output exactly one Markdown document using the structure in “OUTPUT SKELETON” below.
-- Each bullet ≤ 2 lines. Avoid long paragraphs.
-- Use at least 3 different perspective tags across the whole doc: [Algo], [Eng], [Perf], [Robust], [Data/IO], [Agent/Prompt], [Env].
-- Integrate new learnings, keep multi-view diverse experiences; prune outdated or redundant advice.
-- Every conclusion should be evidence-driven. Use this compact evidence format:
-  **Evidence**: Δ<metric> = <abs> (<rel>); n=<sample_size>; artifact#<id>
-  Example: **Evidence**: Δruntime = -120ms (-18%); n=20; artifact#42
-- If evidence is missing or insufficient, write: **Evidence**: insufficient (needs n≥X)
-- “When” = the trigger/conditions under which an item applies (e.g., input scale, data skew, hardware).
-- For “Explore Next”, include minimal change (≤2 bullets) and a probe (metric, n, pass/stop criteria), plus a brief risk.
+## Strict Rules for Output
 
-OUTPUT SKELETON
-(Produce only the following sections and headings—fill them with your content.)
+1. Use the Official Concise Format: Every rule MUST follow this exact structure. The title line combines the ID and the core principle, using a Level 3 Markdown heading.
 
-# Experience KB — Lite (S/F/I/E)
+```markdown
+### Rule ID: RXXX: [The Core Principle of the Rule]
+- **Apply**: [When to use this rule] | **Cost**: [Known trade-offs or costs]
+- **Why**: [Brief explanation of the underlying mechanism]
+- **Origin**: [Iteration ID that established this rule]
+```
 
-## Success (Keep & Reuse)
-- **[Tag] Title** — What: <brief> | Why: <brief> | When: <trigger> | **Evidence**: Δ…; n=…; artifact#…
-- **[Tag] Title** — What: <brief> | Why: <brief> | When: <trigger> | **Evidence**: Δ…; n=…; artifact#…
+2. Categorization is Mandatory: You must place new rules under one of the official English category headings, which are Level 2 Markdown headings:
 
-## Failure (Avoid & Guardrails)
-- **[Tag] Anti-pattern** — Symptom: <brief> | Root cause: <brief> | Fix/Guard: <brief> | **Evidence**: Δ…; n=…; artifact#…
-- **[Tag] Anti-pattern** — Symptom: <brief> | Root cause: <brief> | Fix/Guard: <brief> | **Evidence**: Δ…; n=…; artifact#…
+  - ## I. Algorithmic & Data Structure Principles
 
-## Insights (Generalizable Lessons)
-- **Insight A** — Observation: <brief> | Mechanism: <brief> | Scope: <where it generalizes> | Caveat: <when it fails> | **Evidence**: <compact or “insufficient”>
-- **Insight B** — Observation: <brief> | Mechanism: <brief> | Scope: <where it generalizes> | Caveat: <when it fails> | **Evidence**: <compact or “insufficient”>
+  - ## II. Memory & Locality Optimizations
 
-## Explore Next (Hypotheses & Probes)
-- **H1** — What: <brief> | **Minimal change**: • <small edit 1> • <small edit 2> | **Probe**: metric=<name>, n=<size>, pass if <criterion>, stop if <criterion> | Risk: <brief>
-- **H2** — What: <brief> | **Minimal change**: • <small edit 1> • <small edit 2> | **Probe**: metric=<name>, n=<size>, pass if <criterion>, stop if <criterion> | Risk: <brief>
+  - ## III. Language-Specific Idioms
+
+  - ## IV. I/O & System Call Efficiency
+
+  If the heading does not exist, you must create it.
+
+3. Single-Pass Diff Output: You are expected to perform a complete thought process to analyze the context and decide on all necessary changes (ADD, REPLACE, DELETE). After this internal reasoning, you must generate a final, consolidated diff in a single pass. Your response must contain ONLY the diff blocks. Do not output your step-by-step thinking, explanations, or any form of self-correction.
+
+4. The content inside <<<<<<< SEARCH must **exactly** and uniquely match a block of text in the Existing **Experience KB Content**. For ADD operations, this block **must contain the full, complete rule preceding the desired insertion point** to ensure precise placement.
+
+5. Universality is Key: Rules MUST be **task-agnostic, reusable, and generalizable** across different scenarios. They should capture a fundamental performance principle, not a one-off trick. All rules must be written in clear English.
+
+## Output Skeleton (Examples of the concise format in diffs)
+
+### To REPLACE an existing rule:
+
+```markdown
+<<<<<<< SEARCH
+### Rule ID: R001: An old, less precise principle.
+- **Apply**: ... | **Cost**: ...
+- **Why**: ...
+- **Origin**: old_iter_id
+=======
+### Rule ID: R001: A refined and more accurate principle.
+- **Apply**: More specific conditions | **Cost**: Updated trade-offs
+- **Why**: A clearer explanation.
+- **Origin**: old_iter_id (Refined by: new_iter_id)
+>>>>>>> REPLACE
+```
+
+### To ADD a new rule:
+
+#### To an EXISTING category
+
+The <<<<<<< SEARCH block must contain the complete text of the last existing rule within the target category. This provides an unambiguous anchor for the insertion.
+
+<<<<<<< SEARCH
+### Rule ID: R002: The last existing principle in this category.
+- **Apply**: ... | **Cost**: ...
+- **Why**: ...
+- **Origin**: R002_iter_id
+=======
+### Rule ID: R002: The last existing principle in this category.
+- **Apply**: ... | **Cost**: ...
+- **Why**: ...
+- **Origin**: R002_iter_id
+
+### Rule ID: R003: A new, valuable principle.
+- **Apply**: ... | **Cost**: ...
+- **Why**: ...
+- **Origin**: new_iter_id
+>>>>>>> REPLACE
+
+#### To a NEW category
+
+The <<<<<<< SEARCH block must contain the title of the preceding category.
+
+```markdown
+<<<<<<< SEARCH
+## IV. I/O & System Call Efficiency
+=======
+## IV. I/O & System Call Efficiency
+
+### Rule ID: R003: A new, valuable principle.
+- **Apply**: ... | **Cost**: ...
+- **Why**: ...
+- **Origin**: new_iter_id
+>>>>>>> REPLACE
+```
+
+### To DELETE a rule:
+
+```markdown
+<<<<<<< SEARCH
+### Rule ID: R00Z: A principle that was found to be incorrect.
+- **Apply**: ... | **Cost**: ...
+- **Why**: ...
+- **Origin**: some_iter_id
+=======
+>>>>>>> REPLACE
+```

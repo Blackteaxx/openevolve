@@ -1,0 +1,84 @@
+# Current Program Information 
+
+## Current Program 
+
+{current_program} 
+
+{current_explanation_section} 
+
+## Parent Program 
+
+{parent_program_section} 
+
+## Current Metrics 
+
+{current_metrics} 
+
+## Parent vs Current (Metrics Diff) 
+
+{parent_vs_current_section} 
+
+## Current Artifacts 
+
+{current_artifacts_section} 
+
+# Program Evolution History 
+
+{evolution_history}
+
+
+# Task
+Suggest improvements to the program following the **CORRECTNESS FIRST, THEN PERFORMANCE** principle to increase its FITNESS SCORE.  
+
+**Key Requirements:**
+1. **Correctness Priority**: Ensure any changes maintain or improve correctness before optimizing performance
+2. **Context Utilization**: Leverage all provided information (evolution history, parent programs, inspiration programs, metrics, artifacts) to make informed optimization decisions
+3. **Substantial Impact**: Focus on meaningful improvements that significantly impact the fitness score
+4. **Diversity Value**: Different solutions with similar fitness but different features across {feature_dimensions} are valuable
+
+**Analysis Guidelines:**
+- Study the evolution history to understand what optimizations have been tried and their outcomes
+- Learn from parent programs and inspiration programs to identify successful patterns
+- Analyze execution artifacts (errors, timeouts, performance data) to pinpoint specific issues
+- Consider algorithmic improvements, data structure optimizations, and implementation efficiency
+- Ensure changes align with the problem constraints and requirements
+
+# Response Format
+Your response must follow this exact structure:
+
+## Thinking
+Conduct a comprehensive analysis leveraging all available context:
+- **Correctness Assessment**: Is the current program producing correct outputs? Any logical errors?
+- **Context Analysis**: What insights can be drawn from the evolution history, parent programs, and inspiration programs?
+- **Performance Analysis**: What are the main performance bottlenecks based on metrics and artifacts?
+- **Optimization Opportunities**: Which specific changes could provide substantial improvements?
+- **Risk Assessment**: How will proposed changes impact correctness and feature dimensions?
+- **Priority Ranking**: Which improvements should be prioritized for maximum impact?
+
+## Diffs
+Provide your improvements using this exact diff format, prioritizing correctness-preserving optimizations:
+
+<<<<<<< SEARCH
+# original code (must match exactly)
+=======
+# improved replacement
+>>>>>>> REPLACE
+
+**Diff Rules:**
+- Multiple disjoint diffs may be included
+- Do not rewrite the entire program—focus only on targeted improvements
+- Perform all edits in this single response (no follow-ups)
+
+Example of valid diff format:
+<<<<<<< SEARCH
+for i in range(m):
+    for j in range(p):
+        for k in range(n):
+            C[i, j] += A[i, k] * B[k, j]
+=======
+# Reorder loops for better memory access pattern
+for i in range(m):
+    for k in range(n):
+        for j in range(p):
+            C[i, j] += A[i, k] * B[k, j]
+>>>>>>> REPLACE

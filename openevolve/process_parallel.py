@@ -8,7 +8,7 @@ import multiprocessing as mp
 import time
 from concurrent.futures import Future, ProcessPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from openevolve.config import Config
@@ -38,6 +38,9 @@ class SerializableResult:
     experience_kb_prompt: Optional[Dict[str, str]] = None
     experience_kb_response: Optional[str] = None
     experience_kb_summary: Optional[str] = None
+    # Critical agent prompt/response for logging
+    critical_agent_prompt: Optional[Dict[str, str]] = None
+    critical_agent_response: Optional[str] = None
 
 
 def _worker_init(
@@ -109,14 +112,22 @@ def _worker_init(
 
     # Experience KB config (optional) with dedicated LLM reconstruction
     experience_kb_config = None
-    if "experience_kb" in config_dict and isinstance(config_dict["experience_kb"], dict):
+    if "experience_kb" in config_dict and isinstance(
+        config_dict["experience_kb"], dict
+    ):
         kb_dict = dict(config_dict["experience_kb"])  # shallow copy
         if "llm" in kb_dict and isinstance(kb_dict["llm"], dict):
             kb_llm_dict = dict(kb_dict["llm"])  # shallow copy
             if "models" in kb_llm_dict and isinstance(kb_llm_dict["models"], list):
-                kb_llm_dict["models"] = [LLMModelConfig(**m) for m in kb_llm_dict["models"]]
-            if "evaluator_models" in kb_llm_dict and isinstance(kb_llm_dict["evaluator_models"], list):
-                kb_llm_dict["evaluator_models"] = [LLMModelConfig(**m) for m in kb_llm_dict["evaluator_models"]]
+                kb_llm_dict["models"] = [
+                    LLMModelConfig(**m) for m in kb_llm_dict["models"]
+                ]
+            if "evaluator_models" in kb_llm_dict and isinstance(
+                kb_llm_dict["evaluator_models"], list
+            ):
+                kb_llm_dict["evaluator_models"] = [
+                    LLMModelConfig(**m) for m in kb_llm_dict["evaluator_models"]
+                ]
             kb_dict["llm"] = LLMConfig(**kb_llm_dict)
         experience_kb_config = ExperienceKBConfig(**kb_dict)
 
@@ -126,11 +137,21 @@ def _worker_init(
         database=database_config,
         evaluator=evaluator_config,
         explanation=explanation_config if explanation_config else None,
-        experience_kb=experience_kb_config if experience_kb_config else ExperienceKBConfig(),
+        experience_kb=experience_kb_config
+        if experience_kb_config
+        else ExperienceKBConfig(),
         **{
             k: v
             for k, v in config_dict.items()
-            if k not in ["llm", "prompt", "database", "evaluator", "explanation", "experience_kb"]
+            if k
+            not in [
+                "llm",
+                "prompt",
+                "database",
+                "evaluator",
+                "explanation",
+                "experience_kb",
+            ]
         },
     )
     _worker_evaluation_file = evaluation_file
@@ -222,6 +243,7 @@ def _lazy_init_worker_components():
                 template_manager = _worker_prompt_sampler.template_manager
                 # Prefer dedicated KB LLM if provided, else None (service tolerates None)
                 from openevolve.llm.ensemble import LLMEnsemble
+
                 kb_llm = None
                 if getattr(kb_cfg, "llm", None) and getattr(kb_cfg.llm, "models", None):
                     kb_llm = LLMEnsemble(kb_cfg.llm.models)
@@ -300,11 +322,17 @@ def _run_iteration_worker(
         # KB: Prepare experience KB summary if enabled
         experience_kb_summary = ""
         kb_cfg = getattr(_worker_config, "experience_kb", None)
-        if kb_cfg and getattr(kb_cfg, "enabled", False) and getattr(kb_cfg, "include_in_prompt", True):
+        if (
+            kb_cfg
+            and getattr(kb_cfg, "enabled", False)
+            and getattr(kb_cfg, "include_in_prompt", True)
+        ):
             try:
                 # Update storage dir to worker snapshot output_dir if provided
                 if _worker_experience_kb_service and db_snapshot.get("output_dir"):
-                    _worker_experience_kb_service.set_output_dir(db_snapshot.get("output_dir"))
+                    _worker_experience_kb_service.set_output_dir(
+                        db_snapshot.get("output_dir")
+                    )
                 if _worker_experience_kb_service:
                     experience_kb_summary = _worker_experience_kb_service.get_summary(
                         max_bytes=getattr(kb_cfg, "max_kb_bytes", None)
@@ -325,7 +353,6 @@ def _run_iteration_worker(
             program_artifacts=parent_artifacts,
             feature_dimensions=db_snapshot.get("feature_dimensions", []),
             experience_kb_summary=experience_kb_summary,
-            # 传递自定义的 KB 区块模板键（若配置存在则使用）
             experience_kb_section_key=getattr(kb_cfg, "section_template_key", None),
         )
 
@@ -428,10 +455,15 @@ def _run_iteration_worker(
         # Optionally build and generate explanation via ExplanationService
         explanation_prompt = None
         explanation_response = None
+        # Initialize placeholders to avoid UnboundLocalError later
+        experience_kb_prompt = None
+        experience_kb_response = None
+        critical_agent_prompt = None
+        critical_agent_response = None
+        diff_blocks_str = None
         if use_explanation and _worker_explanation_service is not None:
             try:
                 # Get diff_blocks if available (for diff-based evolution)
-                diff_blocks_str = None
                 if _worker_config.diff_based_evolution and "diff_blocks" in locals():
                     diff_blocks_str = format_diff_blocks_string(diff_blocks)
 
@@ -458,56 +490,71 @@ def _run_iteration_worker(
                 if explanation_response:
                     explanation_text = explanation_response
             except Exception as ex:
-                logger.warning(f"ExplanationService generation failed: {ex}")
+                logger.warning(f"ExplanationService failed: {ex}")
 
-        # Optionally compute and record Experience KB update
-        experience_kb_prompt = None
-        experience_kb_response = None
         kb_update_result: Optional[KBUpdateResult] = None
         if _worker_experience_kb_service is not None:
             try:
-                parent_score = parent.metrics.get("combined_score")
-                child_score = child_metrics.get("combined_score")
-                # Basic policy: record all changes if record_failures, else only improvements
+                # Use trimmed_mean_runtime for improvement comparison
+                parent_runtime = parent.metrics.get("trimmed_mean_runtime")
+                child_runtime = child_metrics.get("trimmed_mean_runtime")
+                # Basic policy: record all changes if record_failures; else only runtime improvements (15% faster)
                 record = True
                 kb_cfg = getattr(_worker_config, "experience_kb", None)
                 if kb_cfg:
                     if not kb_cfg.record_failures:
                         try:
+                            # Original score-based comparison (commented out):
+                            # parent_score = parent.metrics.get("combined_score")
+                            # child_score = child_metrics.get("combined_score")
+                            # record = (
+                            #     isinstance(parent_score, (int, float))
+                            #     and isinstance(child_score, (int, float))
+                            #     and float(child_score) - float(parent_score)
+                            #     > float(getattr(kb_cfg, "min_improvement", 0.0))
+                            #     and float(child_score) >= 0.6000
+                            # )
                             record = (
-                                isinstance(parent_score, (int, float))
-                                and isinstance(child_score, (int, float))
-                                and float(child_score) - float(parent_score)
-                                >= float(getattr(kb_cfg, "min_improvement", 0.0))
+                                isinstance(parent_runtime, (int, float))
+                                and isinstance(child_runtime, (int, float))
+                                and float(child_runtime) <= float(parent_runtime) * 0.85
                             )
                         except Exception:
                             record = False
                 if record:
                     # Prepare diff blocks string if available
                     diff_blocks_str = None
-                    if _worker_config.diff_based_evolution and "diff_blocks" in locals():
+                    if (
+                        _worker_config.diff_based_evolution
+                        and "diff_blocks" in locals()
+                    ):
                         diff_blocks_str = format_diff_blocks_string(diff_blocks)
 
-                    experience_kb_prompt = _worker_experience_kb_service.build_update_prompt(
-                        metrics=child_metrics,
-                        artifacts=artifacts,
-                        changes_summary=changes_summary,
-                        current_code=child_code,
-                        parent_code=parent.code,
-                        language=_worker_config.language,
-                        iteration=iteration,
-                        task_description=(
-                            getattr(_worker_config.prompt, "task_description", None)
-                            or _worker_config.prompt.system_message
-                        ),
-                        parent_metrics=parent.metrics,
-                        diff_blocks=diff_blocks_str,
-                        explanation=explanation_text,
-                    )
+                    # Call ExperienceKBService using raw fields (no prompt dict)
                     kb_update_result = asyncio.run(
-                        _worker_experience_kb_service.generate(experience_kb_prompt)
+                        _worker_experience_kb_service.generate_update(
+                            metrics=child_metrics,
+                            artifacts=artifacts,
+                            changes_summary=changes_summary,
+                            current_code=child_code,
+                            parent_code=parent.code,
+                            language=_worker_config.language,
+                            iteration=iteration,
+                            task_description=(
+                                getattr(_worker_config.prompt, "task_description", None)
+                                or _worker_config.prompt.system_message
+                            ),
+                            parent_metrics=parent.metrics,
+                            diff_blocks=diff_blocks_str,
+                            explanation=explanation_text,
+                        )
                     )
+                    # Record Experience KB prompt/response
+                    experience_kb_prompt = kb_update_result.prompt
                     experience_kb_response = kb_update_result.response
+                    # Capture critical agent prompt/response
+                    critical_agent_prompt = kb_update_result.critical_prompt
+                    critical_agent_response = kb_update_result.critical_response
             except Exception as ex:
                 logger.warning(f"ExperienceKBService update failed: {ex}")
 
@@ -548,7 +595,11 @@ def _run_iteration_worker(
             explanation_response=explanation_response,
             experience_kb_prompt=experience_kb_prompt,
             experience_kb_response=experience_kb_response,
-            experience_kb_summary=(kb_update_result.summary if kb_update_result else experience_kb_summary),
+            experience_kb_summary=(
+                kb_update_result.summary if kb_update_result else experience_kb_summary
+            ),
+            critical_agent_prompt=critical_agent_prompt,
+            critical_agent_response=critical_agent_response,
         )
 
     except Exception as e:
@@ -594,98 +645,10 @@ class ProcessParallelController:
         )
         logger.info(f"Worker-to-island mapping: {self.worker_island_map}")
 
-    def _serialize_config(self, config: Config) -> dict:
-        """Serialize config object to a dictionary that can be pickled"""
-        # Manual serialization to handle nested objects properly
-        return {
-            "llm": {
-                "models": [asdict(m) for m in config.llm.models],
-                "evaluator_models": [asdict(m) for m in config.llm.evaluator_models],
-                "api_base": config.llm.api_base,
-                "api_key": config.llm.api_key,
-                "temperature": config.llm.temperature,
-                "top_p": config.llm.top_p,
-                "max_tokens": config.llm.max_tokens,
-                "timeout": config.llm.timeout,
-                "retries": config.llm.retries,
-                "retry_delay": config.llm.retry_delay,
-            },
-            "prompt": asdict(config.prompt),
-            "database": asdict(config.database),
-            "evaluator": asdict(config.evaluator),
-            "explanation": {
-                "enabled": config.explanation.enabled,
-                "template_key": config.explanation.template_key,
-                "system_message_key": config.explanation.system_message_key,
-                "include_code": config.explanation.include_code,
-                "max_artifacts_bytes": config.explanation.max_artifacts_bytes,
-                "ensemble_role": config.explanation.ensemble_role,
-                "llm": {
-                    "models": [asdict(m) for m in config.explanation.llm.models],
-                    "evaluator_models": [
-                        asdict(m) for m in config.explanation.llm.evaluator_models
-                    ],
-                    "api_base": config.explanation.llm.api_base,
-                    "api_key": config.explanation.llm.api_key,
-                    "temperature": config.explanation.llm.temperature,
-                    "top_p": config.explanation.llm.top_p,
-                    "max_tokens": config.explanation.llm.max_tokens,
-                    "timeout": config.explanation.llm.timeout,
-                    "retries": config.explanation.llm.retries,
-                    "retry_delay": config.explanation.llm.retry_delay,
-                }
-                if config.explanation.llm
-                else None,
-            },
-            "experience_kb": {
-                "enabled": config.experience_kb.enabled,
-                "include_in_prompt": config.experience_kb.include_in_prompt,
-                "section_template_key": getattr(
-                    config.experience_kb, "section_template_key", "experience_kb_section"
-                ),
-                "update_template_key": config.experience_kb.update_template_key,
-                "update_system_message_key": config.experience_kb.update_system_message_key,
-                "storage_dir": config.experience_kb.storage_dir,
-                "max_kb_bytes": config.experience_kb.max_kb_bytes,
-                "min_improvement": config.experience_kb.min_improvement,
-                "record_failures": config.experience_kb.record_failures,
-                "llm": (
-                    {
-                        "models": [asdict(m) for m in getattr(config.experience_kb.llm, "models", [])],
-                        "evaluator_models": [
-                            asdict(m)
-                            for m in getattr(config.experience_kb.llm, "evaluator_models", [])
-                        ],
-                        "api_base": getattr(config.experience_kb.llm, "api_base", None),
-                        "api_key": getattr(config.experience_kb.llm, "api_key", None),
-                        "temperature": getattr(config.experience_kb.llm, "temperature", None),
-                        "top_p": getattr(config.experience_kb.llm, "top_p", None),
-                        "max_tokens": getattr(config.experience_kb.llm, "max_tokens", None),
-                        "timeout": getattr(config.experience_kb.llm, "timeout", None),
-                        "retries": getattr(config.experience_kb.llm, "retries", None),
-                        "retry_delay": getattr(config.experience_kb.llm, "retry_delay", None),
-                    }
-                    if getattr(config.experience_kb, "llm", None) is not None
-                    else None
-                ),
-            },
-            "max_iterations": config.max_iterations,
-            "checkpoint_interval": config.checkpoint_interval,
-            "log_level": config.log_level,
-            "log_dir": config.log_dir,
-            "random_seed": config.random_seed,
-            "diff_based_evolution": config.diff_based_evolution,
-            "max_code_length": config.max_code_length,
-            "language": config.language,
-            # Custom flags
-            "use_explanation": config.use_explanation,
-        }
-
     def start(self) -> None:
         """Start the process pool"""
-        # Convert config to dict for pickling
-        # We need to be careful with nested dataclasses
-        config_dict = self._serialize_config(self.config)
+        # Convert config to dict for pickling using unified to_dict
+        config_dict = self.config.to_dict()
 
         # Pass current environment to worker processes
         import os
@@ -935,6 +898,27 @@ class ProcessParallelController:
                         except Exception as ex:
                             logger.warning(
                                 f"Failed to log Experience KB prompt/response: {ex}"
+                            )
+
+                    # Log Critical agent prompt/response if present
+                    if result.critical_agent_prompt:
+                        try:
+                            critical_template_key = (
+                                self.config.experience_kb.critical_agent_template_key
+                                if self.config.experience_kb
+                                else "critical_agent"
+                            )
+                            self.database.log_prompt(
+                                template_key=critical_template_key,
+                                program_id=child_program.id,
+                                prompt=result.critical_agent_prompt,
+                                responses=[result.critical_agent_response]
+                                if result.critical_agent_response
+                                else [],
+                            )
+                        except Exception as ex:
+                            logger.warning(
+                                f"Failed to log critical agent prompt/response: {ex}"
                             )
 
                     # Island management

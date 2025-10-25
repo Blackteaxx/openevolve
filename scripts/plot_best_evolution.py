@@ -183,6 +183,7 @@ def main():
     parser.add_argument("--output", default="artifacts/multi_best_evolution.png",
                         help="Output image path (default: artifacts/multi_best_evolution.png)")
     parser.add_argument("--title", default=None, help="Optional plot title")
+    parser.add_argument("--x-min", type=float, default=0.0, help="Left bound for X axis (default: 0)")
 
     args = parser.parse_args()
 
@@ -233,6 +234,7 @@ def main():
     plt.title(title)
     plt.legend()
     plt.grid(True, linestyle="--", alpha=0.3)
+    plt.xlim(left=args.x_min)
 
     plt.tight_layout()
     plt.savefig(out_path)

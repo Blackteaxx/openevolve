@@ -1,0 +1,9 @@
+## Previous Attempts
+
+{previous_blocks}
+
+## Top Performing Programs
+
+{top_blocks}
+
+{inspirations_section}
