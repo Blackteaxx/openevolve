@@ -21,7 +21,12 @@ class LLMEnsemble:
         self.models_cfg = models_cfg
 
         # Initialize models from the configuration
-        self.models = [model_cfg.init_client(model_cfg) if model_cfg.init_client else OpenAILLM(model_cfg) for model_cfg in models_cfg]
+        self.models = [
+            model_cfg.init_client(model_cfg)
+            if model_cfg.init_client
+            else OpenAILLM(model_cfg)
+            for model_cfg in models_cfg
+        ]
 
         # Extract and normalize model weights
         self.weights = [model.weight for model in models_cfg]
@@ -51,22 +56,29 @@ class LLMEnsemble:
                 )
             )
             logger._ensemble_logged = True
+        self.last_usage = None
 
     async def generate(self, prompt: str, **kwargs) -> str:
         """Generate text using a randomly selected model based on weights"""
         model = self._sample_model()
-        return await model.generate(prompt, **kwargs)
+        result = await model.generate(prompt, **kwargs)
+        self._capture_model_usage(model)
+        return result
 
     async def generate_with_context(
         self, system_message: str, messages: List[Dict[str, str]], **kwargs
     ) -> str:
         """Generate text using a system message and conversational context"""
         model = self._sample_model()
-        return await model.generate_with_context(system_message, messages, **kwargs)
+        result = await model.generate_with_context(system_message, messages, **kwargs)
+        self._capture_model_usage(model)
+        return result
 
     def _sample_model(self) -> LLMInterface:
         """Sample a model from the ensemble based on weights"""
-        index = self.random_state.choices(range(len(self.models)), weights=self.weights, k=1)[0]
+        index = self.random_state.choices(
+            range(len(self.models)), weights=self.weights, k=1
+        )[0]
         sampled_model = self.models[index]
         logger.info(f"Sampled model: {vars(sampled_model)['model']}")
         return sampled_model
@@ -86,6 +98,14 @@ class LLMEnsemble:
     ) -> str:
         """Generate text using a all available models and average their returned metrics"""
         responses = []
+        usages = []
         for model in self.models:
-            responses.append(await model.generate_with_context(system_message, messages, **kwargs))
+            resp = await model.generate_with_context(system_message, messages, **kwargs)
+            responses.append(resp)
+            usages.append(getattr(model, "last_usage", None))
+        self.last_usage = usages
         return responses
+
+    def _capture_model_usage(self, model: LLMInterface) -> None:
+        usage = getattr(model, "last_usage", None)
+        self.last_usage = usage

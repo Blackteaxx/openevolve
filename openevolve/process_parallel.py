@@ -378,6 +378,9 @@ def _run_iteration_worker(
                 error="LLM returned None response", iteration=iteration
             )
 
+        logger.info(f"LLM Prompt: {prompt}")
+        logger.info(f"LLM Response: {llm_response}")
+
         # Parse response based on evolution mode
         # Add a configurable switch to control whether explanation is extracted/used.
         explanation_text = None
@@ -570,6 +573,27 @@ def _run_iteration_worker(
         if use_explanation and explanation_text:
             metadata["explanation"] = explanation_text
 
+        # Extract token usage from ensemble
+        prompt_tokens = None
+        completion_tokens = None
+        total_tokens = None
+        try:
+            usage = getattr(_worker_llm_ensemble, "last_usage", None)
+            if isinstance(usage, dict):
+                prompt_tokens = usage.get("prompt_tokens")
+                completion_tokens = usage.get("completion_tokens")
+                total_tokens = usage.get("total_tokens")
+            elif isinstance(usage, list):
+                for u in usage:
+                    if isinstance(u, dict):
+                        prompt_tokens = prompt_tokens or u.get("prompt_tokens")
+                        completion_tokens = completion_tokens or u.get(
+                            "completion_tokens"
+                        )
+                        total_tokens = total_tokens or u.get("total_tokens")
+        except Exception:
+            pass
+
         child_program = Program(
             id=child_id,
             code=child_code,
@@ -579,6 +603,9 @@ def _run_iteration_worker(
             metrics=child_metrics,
             iteration_found=iteration,
             metadata=metadata,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
         )
 
         iteration_time = time.time() - iteration_start

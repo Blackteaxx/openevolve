@@ -48,7 +48,9 @@ async def run_iteration_with_shared_db(
 
     try:
         # Sample parent and inspirations from database
-        parent, inspirations = database.sample(num_inspirations=config.prompt.num_top_programs)
+        parent, inspirations = database.sample(
+            num_inspirations=config.prompt.num_top_programs
+        )
 
         # Get artifacts for the parent program if available
         parent_artifacts = database.get_artifacts(parent.id)
@@ -85,7 +87,9 @@ async def run_iteration_with_shared_db(
             diff_blocks = extract_diffs(llm_response)
 
             if not diff_blocks:
-                logger.warning(f"Iteration {iteration+1}: No valid diffs found in response")
+                logger.warning(
+                    f"Iteration {iteration + 1}: No valid diffs found in response"
+                )
                 return None
 
             # Apply the diffs
@@ -96,7 +100,9 @@ async def run_iteration_with_shared_db(
             new_code = parse_full_rewrite(llm_response, config.language)
 
             if not new_code:
-                logger.warning(f"Iteration {iteration+1}: No valid code found in response")
+                logger.warning(
+                    f"Iteration {iteration + 1}: No valid code found in response"
+                )
                 return None
 
             child_code = new_code
@@ -105,7 +111,7 @@ async def run_iteration_with_shared_db(
         # Check code length
         if len(child_code) > config.max_code_length:
             logger.warning(
-                f"Iteration {iteration+1}: Generated code exceeds maximum length "
+                f"Iteration {iteration + 1}: Generated code exceeds maximum length "
                 f"({len(child_code)} > {config.max_code_length})"
             )
             return None
@@ -123,6 +129,19 @@ async def run_iteration_with_shared_db(
         )
 
         # Create a child program
+        # Extract token usage from ensemble
+        prompt_tokens = None
+        completion_tokens = None
+        total_tokens = None
+        try:
+            usage = getattr(llm_ensemble, "last_usage", None)
+            if isinstance(usage, dict):
+                prompt_tokens = usage.get("prompt_tokens")
+                completion_tokens = usage.get("completion_tokens")
+                total_tokens = usage.get("total_tokens")
+        except Exception:
+            pass
+
         result.child_program = Program(
             id=child_id,
             code=child_code,
@@ -135,13 +154,18 @@ async def run_iteration_with_shared_db(
                 "changes": changes_summary,
                 "parent_metrics": parent.metrics,
             },
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
             prompts={
                 template_key: {
                     "system": prompt["system"],
                     "user": prompt["user"],
                     "responses": [llm_response] if llm_response is not None else [],
                 }
-            } if database.config.log_prompts else None,
+            }
+            if database.config.log_prompts
+            else None,
         )
 
         result.prompt = prompt

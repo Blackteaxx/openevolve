@@ -59,7 +59,7 @@ def find_latest_checkpoint_dir(task_dir: Path) -> Optional[Path]:
     Prefer the highest numeric suffix in names like 'checkpoint_50'. If no numeric
     suffix is present, fall back to latest modification time.
     """
-    base = Path(task_dir) / "openevolve_output" / "checkpoints"
+    base = Path(task_dir) / "openevolve_output" / "run_1" / "checkpoints"
     if not base.exists():
         return None
 

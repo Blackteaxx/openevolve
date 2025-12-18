@@ -1,18 +1,19 @@
 # Configuration for code minimization example
-max_iterations: 80
+max_iterations: 30
 checkpoint_interval: 5
 language: python
 use_explanation: false
 
 llm:
-  primary_model: "Qwen3-32B"
+  primary_model: Claude 4.5 Sonnet"
   primary_model_weight: 1
 
-  api_base: http://127.0.0.1:8080/v1
-  api_key: code-efficiency                     
+  api_base: 
+  api_key: 
   temperature: 0.7
   max_tokens: 8000
   timeout: 120
+  enable_thinking: false
 
 # Explanation configuration (dedicated LLM ensemble)
 explanation:
@@ -34,6 +35,7 @@ explanation:
     temperature: 0.7
     max_tokens: 8000
     timeout: 120
+    enable_thinking: true
 
 # Experience Knowledge Base (KB) configuration
 experience_kb:
@@ -50,6 +52,7 @@ experience_kb:
     temperature: 0.7
     max_tokens: 8000
     timeout: 120
+    enable_thinking: true
 
 # Prompt configuration
 prompt:
@@ -61,6 +64,11 @@ prompt:
     ## Instructions
     You are an expert competitive programmer and software engineer specializing in algorithm design and implementation. Your core principle is **CORRECTNESS FIRST, THEN PERFORMANCE** — make the program correct and robust before optimizing for efficiency.
 
+    A **key optimization objective** is the **integral** of the memory–time curve over **all** test cases:
+    - Think of this as the **area under the curve** of `memory_usage(t)` across the whole execution.
+    - The global objective is to **minimize the sum of these integrals** over all test cases.
+    - This encourages solutions that are good in both **runtime** and **memory footprint**, not just one or the other (e.g., avoid trading huge extra memory for a tiny speedup, or vice versa, unless it clearly reduces the integral).
+
     Your task is to iteratively improve the given program for the following problem in Python3:
 
     ## Problem Description
@@ -70,7 +78,7 @@ prompt:
     
     **Ensure:**
     1. **Correctness** — produce correct outputs for all required cases; preserve intended behavior outside targeted changes.
-    2. **Performance** — improve time complexity only after correctness; prefer algorithmic improvements over micro-optimizations.
+    2. **Performance** — improve runtime and memory efficiency only after correctness; prefer algorithmic improvements over micro-optimizations.
     3. **Code Quality** — keep the code readable and maintainable; avoid unnecessary refactors.
     4. **Diversity** — explore alternative algorithms, data structures, or techniques( use built-in operators, packages etc. ) when appropriate.
     5. **Pragmatism** — be bold but disciplined; iterate toward the most effective solution.
@@ -158,7 +166,7 @@ prompt:
     - Imports comply with the allowed scope; import changes are diffed appropriately.
 
   # 2025.9.17: Add Template Dir
-  template_dir: "/data/CodeEfficiency/openevolve/openevolve/prompts/defaults"
+  template_dir: "/data/CodeEfficiency/openevolve/openevolve/prompts/KB+EnhancedKB+EnhancedCriticalAgentPrompt+SelectRules"
 
   # 2025.9.26: Add num_top_programs and num_diverse_programs
   num_top_programs: 1

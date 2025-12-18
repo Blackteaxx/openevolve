@@ -1,24 +1,17 @@
 exp_roots=(
-    "/data/CodeEfficiency/openevolve/examples/archive/effibench_code_optimization_Qwen3-32B-Pass-Threshold-Enhanced-NoRepEval-2"
-    "/data/CodeEfficiency/openevolve/examples/archive/effibench_code_optimization_Qwen3-32B-Pass-Threshold-Enhanced-NoRepEval-2-2"
-    "/data/CodeEfficiency/openevolve/examples/archive/effibench_code_optimization_Qwen3-32B-Pass-Threshold-EnhancedExplanation-NoRepEval-2"
-    "/data/CodeEfficiency/openevolve/examples/archive/effibench_code_optimization_Qwen3-32B-Pass-Threshold-EnhancedExplanation-NoRepEval-2-2"
-    "/data/CodeEfficiency/openevolve/examples/archive/effibench_code_optimization_Qwen3-32B-Pass-Threshold-EnhancedExplanation-KB-NoRepEval-2"
-    "/data/CodeEfficiency/openevolve/examples/archive/effibench_code_optimization_Qwen3-32B-Pass-Threshold-KB-NoRepEval-2"
-    "/data/CodeEfficiency/openevolve/examples/archive/effibench_code_optimization_Qwen3-32B-Pass-Threshold-KB-NoRepEval-3"
-)
+    "/data/CodeEfficiency/openevolve/examples/archive/Qwen3-32B@30-baseline"
+    "/data/CodeEfficiency/openevolve/examples/archive/Qwen3-32B@30-baseline+explanation"
+    "/data/CodeEfficiency/openevolve/examples/archive/Qwen3-32B@30-baseline+KB"
+    "/data/CodeEfficiency/openevolve/examples/archive/Qwen3-32B@30-baseline+KB+randomrules")
 
-task="atcoder_abc390c_paint-to-make-a-rectangle"
+task="aizu_3619_lcp-queries"
 metric="trimmed_mean_runtime"
 
 labels=(
-    "Qwen3-32B-NoRepEval-2"
-    "Qwen3-32B-NoRepEval-2-2"
-    "Qwen3-32B-Explanation-NoRepEval-2"
-    "Qwen3-32B-Explanation-NoRepEval-2-2"
-    "Qwen3-32B-Explanation-KB-NoRepEval-2"
-    "Qwen3-32B-KB-NoRepEval-2"
-    "Qwen3-32B-KB-NoRepEval-3"
+    "Qwen3-32B-Baseline"
+    "Qwen3-32B-Baseline+Explanation"
+    "Qwen3-32B-Baseline+KB"
+    "Qwen3-32B-Baseline+KB+RandomRules"
 )
 
 python scripts/plot_task_latest_checkpoint.py \

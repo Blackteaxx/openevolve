@@ -213,7 +213,9 @@ class ExperienceKBService:
                 self.logger.info(f"KB random summary: k={k} max_k={max_k}")
                 content = self._select_random_rules(content, k)
             except Exception as e:
-                self.logger.warning(f"KB random summary failed: {e}; falling back to full content.")
+                self.logger.warning(
+                    f"KB random summary failed: {e}; falling back to full content."
+                )
         encoded = content.encode("utf-8")
         if len(encoded) > max_bytes:
             return encoded[:max_bytes].decode("utf-8", errors="ignore")
@@ -658,7 +660,7 @@ class ExperienceKBService:
             except Exception as e:
                 self.logger.warning(f"Critical agent call failed: {e}")
                 agent_output = None
-            
+
             # Track last critical agent raw response for logging purposes
             last_critical_response = agent_output
 

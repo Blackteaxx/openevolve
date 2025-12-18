@@ -1,18 +1,15 @@
 import concurrent.futures
-import os
-from typing import Any, Dict, List
+from collections import Counter
+from typing import Any
 
-from .analysis import analyze_runtimes
+from .analysis import analyze_samples
 from .run_tests import run_tests
-
-# os.environ["BACKEND_BASE_URL"] = "http://10.52.10.118:8000,http://10.54.241.81:8000"
-# os.environ["BACKEND_BASE_URL"] = "http://146.56.216.99:8000"
 
 
 def run_performance_benchmark(
     lang: str,
     solution: str,
-    test_cases: List[Dict[str, Any]],
+    test_cases: list[dict[str, Any]],
     evaluator: str,
     test_runner: str | None = None,
     num_runs: int = 5,
@@ -20,7 +17,7 @@ def run_performance_benchmark(
     memory_limit: int = 1024,
     trim_ratio: float = 0.1,
     max_workers: int = 4,
-) -> Dict[str, float]:
+) -> dict[str, Any]:
     """
     Runs a performance benchmark for a given solution against a set of test cases.
 
@@ -73,27 +70,47 @@ def run_performance_benchmark(
                 print(f"A test run failed with an exception: {e}")
 
     if not all_results:
-        # If there are no results, return a default failure structure.
-        analysis_results = {
+        runtime_an = analyze_samples([], trim_ratio=trim_ratio)
+        memory_an = analyze_samples([], trim_ratio=trim_ratio)
+        integral_an = analyze_samples([], trim_ratio=trim_ratio)
+        perf = {
             "original_n": 0,
             "n": 0,
-            "mean": float("inf"),
-            "std": float("inf"),
-            "min": float("inf"),
-            "max": float("inf"),
-            "max_diff": float("inf"),
-            "95%_CI": (float("inf"), float("inf")),
-            "trimmed_mean": float("inf"),
+            "runtime": runtime_an.get("trimmed_mean", float("inf")),
+            "memory": memory_an.get("trimmed_mean", float("inf")),
+            "integral": integral_an.get("trimmed_mean", float("inf")),
+            "passed": False,
+            "pass_rate": 0.0,
+            "analysis": {
+                "runtime": runtime_an,
+                "memory": memory_an,
+                "integral": integral_an,
+            },
         }
         return {
-            "performance_analysis": analysis_results,
+            "performance_analysis": perf,
             "first_run_details": [],
             "failed_submission_exit_codes": [],
             "pass_rates": [],
-            "pass_rate_consistent": False,
+            "pass_rate_consistent": True,
         }
 
-    first_run_results = all_results[0]
+    # Compute pass rate consistency across all runs
+    pass_rates = []
+    for test_case_results in all_results:
+        total_cases_run = len(test_case_results)
+        num_passed_run = sum(1 for tc in test_case_results if tc.get("passed", False))
+        pr = num_passed_run / total_cases_run if total_cases_run > 0 else 0.0
+        pass_rates.append(pr)
+
+    pass_rate_consistent = len(set(pass_rates)) == 1
+
+    # Calculate pass-rate by the majority vote
+    pass_rate = Counter(pass_rates).most_common(1)[0][0]
+
+    # Select the run whose pass rate matches the majority vote
+    run_index = next((idx for idx, pr in enumerate(pass_rates) if pr == pass_rate), 0)
+    first_run_results = all_results[run_index]
 
     # Collect detailed information about failed test cases from the first run
     failed_test_details = []
@@ -109,21 +126,6 @@ def run_performance_benchmark(
             }
             failed_test_details.append(failure_details)
 
-    # Compute pass rate consistency across all runs
-    pass_rates = []
-    for test_case_results in all_results:
-        total_cases_run = len(test_case_results)
-        num_passed_run = sum(1 for tc in test_case_results if tc.get("passed", False))
-        pr = num_passed_run / total_cases_run if total_cases_run > 0 else 0.0
-        pass_rates.append(pr)
-
-    pass_rate_consistent = len(set(pass_rates)) == 1
-
-    # Calculate pass rate from the first run
-    num_passed = sum(1 for tc in first_run_results if tc.get("passed", False))
-    total_cases = len(first_run_results)
-    pass_rate = num_passed / total_cases if total_cases > 0 else 0.0
-
     # Print brief pass-rate consistency summary
     try:
         pr_str = ", ".join(f"{pr:.2f}" for pr in pass_rates)
@@ -132,43 +134,54 @@ def run_performance_benchmark(
     consistency_label = "consistent" if pass_rate_consistent else "inconsistent"
     if not pass_rate_consistent:
         print(
-            f"Pass rate consistency across {len(all_results)} runs: {consistency_label} | pass_rates: [{pr_str}] | first_run: {pass_rate:.2f}"
+            f"Pass rate consistency across {len(all_results)} runs: {consistency_label} | pass_rates: [{pr_str}] | majority_based: {pass_rate:.2f}"
         )
 
-    # Collect runtimes only if all tests passed
-    successful_runtimes = []
+    # Collect aggregated metrics per run only if all tests passed
+    successful_runtimes: list[float] = []
+    successful_memories: list[float] = []
+    successful_integrals: list[float] = []
     if pass_rate == 1.0:
         for test_case_results in all_results:
-            # This check is for robustness, assuming subsequent runs should also pass if the first did.
             if bool(test_case_results) and all(
                 tc.get("passed", False) for tc in test_case_results
             ):
-                total_runtime_ns = sum(tc.get("runtime", 0) for tc in test_case_results)
+                total_runtime_ns = sum(
+                    tc.get("runtime", 0.0) for tc in test_case_results
+                )
                 total_runtime_s = total_runtime_ns / 1_000_000_000.0
-                successful_runtimes.append(total_runtime_s)
+                total_peak_memory_b = max(
+                    tc.get("memory", 0.0) for tc in test_case_results
+                )
+                total_peak_memory_mb = total_peak_memory_b / 1_000  # Convert to MB
+                total_integral_mb_s = sum(
+                    tc.get("integral", 0.0) for tc in test_case_results
+                )
+                successful_runtimes.append(float(total_runtime_s))
+                successful_memories.append(float(total_peak_memory_mb))
+                successful_integrals.append(float(total_integral_mb_s))
 
-    # Analyze runtimes if we have any successful (and complete) runs
-    if successful_runtimes:
-        analysis_results = analyze_runtimes(
-            successful_runtimes, trim_ratio=trim_ratio
-        )
-    else:
-        # This path is taken if pass_rate < 1.0 or if all runs failed unexpectedly
-        analysis_results = {
-            "original_n": 0,
-            "n": 0,
-            "mean": float("inf"),
-            "std": float("inf"),
-            "min": float("inf"),
-            "max": float("inf"),
-            "max_diff": float("inf"),
-            "95%_CI": (float("inf"), float("inf")),
-            "trimmed_mean": float("inf"),
-        }
+    runtime_analysis = analyze_samples(successful_runtimes, trim_ratio=trim_ratio)
+    memory_analysis = analyze_samples(successful_memories, trim_ratio=trim_ratio)
+    integral_analysis = analyze_samples(successful_integrals, trim_ratio=trim_ratio)
 
-    # Construct the final return dictionary as requested
+    perf = {
+        "original_n": num_runs,
+        "n": len(successful_runtimes),
+        "runtime": runtime_analysis.get("trimmed_mean", float("inf")),
+        "memory": memory_analysis.get("trimmed_mean", float("inf")),
+        "integral": integral_analysis.get("trimmed_mean", float("inf")),
+        "passed": pass_rate == 1.0,
+        "pass_rate": pass_rate,
+        "analysis": {
+            "runtime": runtime_analysis,
+            "memory": memory_analysis,
+            "integral": integral_analysis,
+        },
+    }
+
     return {
-        "performance_analysis": analysis_results,
+        "performance_analysis": perf,
         "first_run_details": first_run_results,
         "failed_test_details": failed_test_details,
         "pass_rates": pass_rates,

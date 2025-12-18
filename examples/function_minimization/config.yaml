@@ -1,24 +1,55 @@
 # Configuration for function minimization example
 max_iterations: 50
 checkpoint_interval: 5
+use_explanation: true 
 
-# LLM configuration
 llm:
-  primary_model: "google/gemini-2.5-flash-lite"
-  # primary_model: "llama3.1-8b"
-  primary_model_weight: 0.8
-  secondary_model: "google/gemini-2.5-flash"
-  # secondary_model: "llama-4-scout-17b-16e-instruct"
-  
-  secondary_model_weight: 0.2
-  # 2025.9.16: Revise for openrouter.ai
-  api_base: https://openrouter.ai/api/v1
-  api_key: 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                     
-  # api_base: "https://generativelanguage.googleapis.com/v1beta/openai/"
-  # api_base: "https://api.cerebras.ai/v1"
+  primary_model: "Qwen3-32B"
+  primary_model_weight: 1
+
+  api_base: http://127.0.0.1:8080/v1
+  api_key: code-efficiency                     
   temperature: 0.7
-  max_tokens: 16000
+  max_tokens: 8000
   timeout: 120
+
+
+# Explanation configuration (dedicated LLM ensemble)
+explanation:
+  enabled: true
+  template_key: "explanation"
+  system_message_key: "system_message"
+  include_code: true
+  max_artifacts_bytes: 1024
+  # Choose which role to base defaults on when no dedicated LLM provided
+  # Options: "evolution" or "evaluator"
+  ensemble_role: "evolution"
+  # Dedicated LLM configuration for explanations
+  llm:
+    primary_model: "Qwen3-32B"
+    primary_model_weight: 1
+
+    api_base: http://127.0.0.1:8080/v1
+    api_key: code-efficiency                     
+    temperature: 0.7
+    max_tokens: 8000
+    timeout: 120
+
+# Experience Knowledge Base (KB) configuration
+experience_kb:
+  enabled: true            # Enable KB updates and storage
+  include_in_prompt: true  # Inject KB summary into evolution prompts
+  record_failures: false  # Record negative learnings when score drops
+  
+  llm:
+    primary_model: "deepseek-v3"
+    primary_model_weight: 1
+
+    api_base: http://publicshare.a.pinggy.link/v1
+    api_key: token-abc123                   
+    temperature: 0.7
+    max_tokens: 8000
+    timeout: 120
 
 # Prompt configuration
 prompt:
@@ -38,6 +69,8 @@ evaluator:
   timeout: 60
   cascade_thresholds: [1.3]
   parallel_evaluations: 3
+
+
 
 # Evolution settings
 diff_based_evolution: true

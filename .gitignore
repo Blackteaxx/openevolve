@@ -59,6 +59,7 @@ examples/online_judge_programming/.kattisrc
 *.tmp
 examples/effibench_code_optimization/
 examples/archive/
+examples/*
 
 # artifacts
 artifacts/

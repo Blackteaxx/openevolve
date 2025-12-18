@@ -54,6 +54,7 @@ class OpenAILLM(LLMInterface):
         if self.model not in logger._initialized_models:
             logger.info(f"Initialized OpenAI LLM with model: {self.model}")
             logger._initialized_models.add(self.model)
+        self.last_usage = None
 
     async def generate(self, prompt: str, **kwargs) -> str:
         """Generate text from a prompt"""
@@ -139,7 +140,10 @@ class OpenAILLM(LLMInterface):
         # Skip seed parameter for Google AI Studio endpoint as it doesn't support it
         seed = kwargs.get("seed", self.random_seed)
         if seed is not None:
-            if self.api_base == "https://generativelanguage.googleapis.com/v1beta/openai/":
+            if (
+                self.api_base
+                == "https://generativelanguage.googleapis.com/v1beta/openai/"
+            ):
                 logger.warning(
                     "Skipping seed parameter as Google AI Studio endpoint doesn't support it. "
                     "Reproducibility may be limited."
@@ -157,7 +161,6 @@ class OpenAILLM(LLMInterface):
             eb = {}
         else:
             eb = None
-
 
         # Determine enable_thinking from explicit arg, kwargs, or model default
         enable_thinking_value = (
@@ -182,11 +185,15 @@ class OpenAILLM(LLMInterface):
 
         for attempt in range(retries + 1):
             try:
-                response = await asyncio.wait_for(self._call_api(params), timeout=timeout)
+                response = await asyncio.wait_for(
+                    self._call_api(params), timeout=timeout
+                )
                 return response
             except asyncio.TimeoutError:
                 if attempt < retries:
-                    logger.warning(f"Timeout on attempt {attempt + 1}/{retries + 1}. Retrying...")
+                    logger.warning(
+                        f"Timeout on attempt {attempt + 1}/{retries + 1}. Retrying..."
+                    )
                     await asyncio.sleep(retry_delay)
                 else:
                     logger.error(f"All {retries + 1} attempts failed with timeout")
@@ -198,7 +205,9 @@ class OpenAILLM(LLMInterface):
                     )
                     await asyncio.sleep(retry_delay)
                 else:
-                    logger.error(f"All {retries + 1} attempts failed with error: {str(e)}")
+                    logger.error(
+                        f"All {retries + 1} attempts failed with error: {str(e)}"
+                    )
                     raise
 
     async def _call_api(self, params: Dict[str, Any]) -> str:
@@ -208,10 +217,52 @@ class OpenAILLM(LLMInterface):
         response = await loop.run_in_executor(
             None, lambda: self.client.chat.completions.create(**params)
         )
+        try:
+            usage_obj = getattr(response, "usage", None)
+            prompt_tokens = None
+            completion_tokens = None
+            total_tokens = None
+            if usage_obj is not None:
+                prompt_tokens = getattr(usage_obj, "prompt_tokens", None)
+                if prompt_tokens is None and hasattr(usage_obj, "get"):
+                    prompt_tokens = usage_obj.get("prompt_tokens")
+                completion_tokens = getattr(usage_obj, "completion_tokens", None)
+                if completion_tokens is None and hasattr(usage_obj, "get"):
+                    completion_tokens = usage_obj.get("completion_tokens")
+                total_tokens = getattr(usage_obj, "total_tokens", None)
+                if total_tokens is None and hasattr(usage_obj, "get"):
+                    total_tokens = usage_obj.get("total_tokens")
+                if prompt_tokens is None and hasattr(usage_obj, "input_tokens"):
+                    prompt_tokens = getattr(usage_obj, "input_tokens", None)
+                if prompt_tokens is None and hasattr(usage_obj, "get"):
+                    pt = usage_obj.get("input_tokens")
+                    if prompt_tokens is None:
+                        prompt_tokens = pt
+                if completion_tokens is None and hasattr(usage_obj, "output_tokens"):
+                    completion_tokens = getattr(usage_obj, "output_tokens", None)
+                if completion_tokens is None and hasattr(usage_obj, "get"):
+                    ct = usage_obj.get("output_tokens")
+                    if completion_tokens is None:
+                        completion_tokens = ct
+            self.last_usage = {
+                "model": getattr(response, "model", self.model),
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": total_tokens,
+            }
+        except Exception:
+            self.last_usage = {
+                "model": getattr(response, "model", self.model),
+                "prompt_tokens": None,
+                "completion_tokens": None,
+                "total_tokens": None,
+            }
         # Extract and sanitize response content by removing <think>...</think> sections
         content = response.choices[0].message.content
         if isinstance(content, str):
-            sanitized_content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL | re.IGNORECASE)
+            sanitized_content = re.sub(
+                r"<think>.*?</think>", "", content, flags=re.DOTALL | re.IGNORECASE
+            )
         else:
             sanitized_content = content
 
@@ -220,5 +271,5 @@ class OpenAILLM(LLMInterface):
         logger.debug(f"API parameters: {params}")
         logger.debug(f"API response (include thinking): {content}")
         logger.debug(f"API response: {sanitized_content}")
-        
+
         return sanitized_content

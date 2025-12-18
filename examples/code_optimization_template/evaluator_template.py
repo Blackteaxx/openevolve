@@ -74,6 +74,7 @@ def evaluate(
     )
     trimming_fraction = problem_config["trimming_fraction"]
     max_workers = problem_config["max_workers"]
+    time_score_target = problem_config.get("time_score_target", "runtime")
 
     logger.info("evaluate: Calling run_performance_benchmark...")
     # Run the performance benchmark
@@ -92,7 +93,7 @@ def evaluate(
     logger.info("evaluate: run_performance_benchmark finished.")
 
     performance_metrics = benchmark_results["performance_analysis"]
-    failed_test_details = benchmark_results["failed_test_details"]
+    failed_test_details = benchmark_results.get("failed_test_details", [])
 
     if failed_test_details:
         # If there are failed submissions, return an error result
@@ -100,7 +101,8 @@ def evaluate(
         num_total = len(benchmark_results["first_run_details"])
         pass_rate = (num_total - num_failed) / num_total if num_total > 0 else 0
         time_score = 0.0
-        combined_score = 0.6 * pass_rate + 0.4 * time_score
+        # If pass rate < 1, combined score is 0
+        combined_score = 0.0
 
         # Aggregate details from all failed test cases to provide a comprehensive report
         # Group failures by status and provide one representative example for each
@@ -115,7 +117,9 @@ def evaluate(
             text = failure.get("text", "No additional error text.")
             if len(text) > 300:
                 text = text[-300:] + "..."
-            failure_details_summary.append(f"- Status: {status}, Details (last 300 chars of Output): {text}")
+            failure_details_summary.append(
+                f"- Status: {status}, Details (last 300 chars of Output): {text}"
+            )
 
         # Join the summaries for a comprehensive error message
         failures_text = "\n".join(failure_details_summary)
@@ -135,8 +139,7 @@ def evaluate(
         return EvaluationResult(
             metrics={
                 "pass_rate": pass_rate,
-                "trimmed_mean_runtime": "Infinity",
-                "time_score": time_score,
+                "integral_score": time_score,
                 "combined_score": combined_score,
                 "error": f"Solution failed {len(failed_test_details)} test case(s) with statuses: {all_statuses}. See artifacts for details.",
             },
@@ -145,21 +148,47 @@ def evaluate(
     else:
         # All tests passed, return performance metrics
         pass_rate = 1.0
-        trimmed_mean_runtime = performance_metrics["trimmed_mean"]
+        trimmed_mean_runtime = performance_metrics.get("runtime", float("inf"))
+        trimmed_mean_memory = performance_metrics.get("memory", float("inf"))
+        trimmed_mean_integral = performance_metrics.get("integral", float("inf"))
 
         # Calculate time_score using an exponential decay function
         alpha = 5  # A decay constant to adjust the score distribution
-        time_score = math.exp(-alpha * trimmed_mean_runtime / time_limit)
+        target = (
+            time_score_target
+            if time_score_target in {"runtime", "memory", "integral"}
+            else "runtime"
+        )
+        target_value = (
+            trimmed_mean_runtime
+            if target == "runtime"
+            else trimmed_mean_memory
+            if target == "memory"
+            else trimmed_mean_integral
+        )
+        num_cases = len(benchmark_results.get("first_run_details", [])) or 1
+        limit_value = (
+            time_limit * num_cases
+            if target == "runtime"
+            else memory_limit * num_cases
+            if target == "memory"
+            else memory_limit * time_limit * num_cases
+        )
+        time_score = (
+            math.exp(-alpha * (target_value / limit_value))
+            if limit_value and limit_value > 0
+            else 0.0
+        )
 
         # Calculate combined_score
-        combined_score = 0.6 * pass_rate + 0.4 * time_score
+        # If pass rate is 1.0, combined score = 0.6 + 0.4 * time_score
+        combined_score = 0.6 + 0.4 * time_score
 
         print("evaluate: Returning success result.")
         return EvaluationResult(
             metrics={
                 "pass_rate": pass_rate,
-                "trimmed_mean_runtime": trimmed_mean_runtime,
-                "time_score": time_score,
+                "integral_score": time_score,
                 "combined_score": combined_score,
             },
             artifacts={"details": "All test cases passed."},

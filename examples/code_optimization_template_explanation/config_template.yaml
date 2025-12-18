@@ -13,6 +13,7 @@ llm:
   temperature: 0.7
   max_tokens: 8000
   timeout: 120
+  enable_thinking: false
 
 # Explanation configuration (dedicated LLM ensemble)
 explanation:
@@ -34,6 +35,7 @@ explanation:
     temperature: 0.7
     max_tokens: 8000
     timeout: 120
+    enable_thinking: true
 
 # Prompt configuration
 prompt:
@@ -142,7 +144,7 @@ prompt:
     - Imports comply with the allowed scope; import changes are diffed appropriately.
 
   # 2025.9.17: Add Template Dir
-  template_dir: "/data/CodeEfficiency/openevolve/openevolve/prompts/defaults"
+  template_dir: "/data/CodeEfficiency/openevolve/openevolve/prompts/KB+EnhancedKB+EnhancedCriticalAgentPrompt+SelectRules"
 
   # 2025.9.26: Add num_top_programs and num_diverse_programs
   num_top_programs: 1
@@ -164,7 +166,7 @@ evaluator:
   enable_artifacts: true      # Error feedback to LLM
   cascade_evaluation: true
   cascade_thresholds: [0.6]   # Set as the weight of pass rate to decide if the solution passes the cascade evaluation
-  parallel_evaluations: 2
+  parallel_evaluations: 1
 
 # Evolution settings
 diff_based_evolution: true
